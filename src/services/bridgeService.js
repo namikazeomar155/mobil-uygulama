@@ -1,14 +1,47 @@
 import { storageService } from './storageService';
 
-const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
+const GITHUB_API_CONFIG_URL = 'https://api.github.com/repos/namikazeomar155/mobil-uygulama/contents/remote-config.json';
+const RAW_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
 
 let cachedBridgeUrl = '';
+let cachedBackupUrl = '';
 let cachedLanUrl = 'http://192.168.178.59:4040';
+let lastWorkingUrl = '';
 
 export const bridgeService = {
   /**
-   * GitHub üzerinden en güncel canlı laptop tünel adresini çeker
+   * GitHub API üzerinden (0 saniye önbellek gecikmesiyle) canlı laptop tünel adreslerini çeker
    */
+  async fetchRemoteConfig() {
+    // 1. Önce GitHub REST API (CDN önbelleğine takılmaz, anında güncel veriyi döner)
+    try {
+      const apiRes = await fetch(`${GITHUB_API_CONFIG_URL}?ref=main&_=${Date.now()}`, {
+        headers: {
+          Accept: 'application/vnd.github.raw+json',
+          'Cache-Control': 'no-cache',
+        },
+      });
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data && (data.bridgeUrl || data.version)) {
+          return data;
+        }
+      }
+    } catch (e) {}
+
+    // 2. Yedek: GitHub Raw URL
+    try {
+      const rawRes = await fetch(`${RAW_CONFIG_URL}?t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (rawRes.ok) {
+        return await rawRes.json();
+      }
+    } catch (e) {}
+
+    return null;
+  },
+
   async discoverBridgeUrl(forceRefresh = false) {
     try {
       const settings = await storageService.getSettings();
@@ -16,70 +49,77 @@ export const bridgeService = {
         return settings.customBridgeUrl.trim().replace(/\/$/, '');
       }
 
-      if (cachedBridgeUrl && !forceRefresh) {
-        return cachedBridgeUrl;
+      if (lastWorkingUrl && !forceRefresh) {
+        return lastWorkingUrl;
       }
 
-      const res = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
-      if (res.ok) {
-        const cfg = await res.json();
-        if (cfg.bridgeUrl) {
-          cachedBridgeUrl = cfg.bridgeUrl.replace(/\/$/, '');
-        }
-        if (cfg.lanUrl) {
-          cachedLanUrl = cfg.lanUrl.replace(/\/$/, '');
-        }
+      const cfg = await this.fetchRemoteConfig();
+      if (cfg) {
+        if (cfg.bridgeUrl) cachedBridgeUrl = cfg.bridgeUrl.replace(/\/$/, '');
+        if (cfg.backupTunnelUrl) cachedBackupUrl = cfg.backupTunnelUrl.replace(/\/$/, '');
+        if (cfg.lanUrl) cachedLanUrl = cfg.lanUrl.replace(/\/$/, '');
       }
-      return cachedBridgeUrl || cachedLanUrl;
+
+      return cachedBridgeUrl || cachedBackupUrl || cachedLanUrl;
     } catch (e) {
-      return cachedBridgeUrl || cachedLanUrl;
+      return cachedBridgeUrl || cachedBackupUrl || cachedLanUrl;
     }
   },
 
   /**
-   * Otomatik yeniden denemeli (Auto-Retry) köprü isteği
+   * Çoklu Tünel & Otomatik Yedekli (Cloudflare -> SSH Tunnel -> Yerel Wi-Fi LAN) Köprü İsteği
    */
   async request(endpoint, options = {}) {
-    let baseUrl = await this.discoverBridgeUrl(false);
-
-    const tryFetch = async (url) => {
+    const tryFetch = async (url, timeoutMs = 9000) => {
+      if (!url) throw new Error('Boş URL');
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetch(`${url}${endpoint}`, {
           ...options,
           headers: {
             'Content-Type': 'application/json',
+            'Bypass-Tunnel-Reminder': 'true',
             ...(options.headers || {}),
           },
           signal: controller.signal,
         });
         clearTimeout(timeout);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.json();
+        const json = await response.json();
+        lastWorkingUrl = url;
+        return json;
       } catch (err) {
         clearTimeout(timeout);
         throw err;
       }
     };
 
+    // 1. Önce bilinen en son çalışan veya keşfedilen birincil adresi dene
+    const primaryUrl = await this.discoverBridgeUrl(false);
     try {
-      return await tryFetch(baseUrl);
+      return await tryFetch(primaryUrl, 8000);
     } catch (firstErr) {
-      // Tünel adresi yenilenmiş olabilir, GitHub'dan taze adresi çekip tekrar dene
-      try {
-        const freshUrl = await this.discoverBridgeUrl(true);
-        if (freshUrl && freshUrl !== baseUrl) {
-          return await tryFetch(freshUrl);
+      // 2. Başarısız olursa GitHub API'den taze tünel listesini çek ve tüm adayları sırayla dene
+      await this.discoverBridgeUrl(true);
+      const candidates = [
+        cachedBridgeUrl,
+        cachedBackupUrl,
+        cachedLanUrl,
+      ].filter((u, idx, arr) => u && arr.indexOf(u) === idx);
+
+      for (const candidate of candidates) {
+        try {
+          return await tryFetch(candidate, 7000);
+        } catch (err) {
+          // Sonraki adaya geç
         }
-        // Aynı Wi-Fi üzerindeyse yerel LAN IP'sini dene
-        return await tryFetch(cachedLanUrl);
-      } catch (secondErr) {
-        return {
-          ok: false,
-          error: 'Laptop köprüsüne ulaşılamadı. Bilgisayarınızın açık olduğundan emin olun.',
-        };
       }
+
+      return {
+        ok: false,
+        error: 'Laptop köprüsüne ulaşılamadı. Bilgisayarınızın açık ve internete bağlı olduğundan emin olun.',
+      };
     }
   },
 

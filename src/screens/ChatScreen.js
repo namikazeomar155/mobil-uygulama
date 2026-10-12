@@ -92,7 +92,7 @@ export default function ChatScreen() {
     >
       <Header
         subtitle="Antigravity & PC Köprüsü"
-        title="Komutan AI 🤖"
+        title="Namikaze AI 🤖"
         rightElement={
           <TouchableOpacity onPress={handleClear} style={styles.clearBtn}>
             <Text style={styles.clearBtnText}>Temizle</Text>
@@ -153,7 +153,7 @@ export default function ChatScreen() {
       <View style={styles.inputBar}>
         <TextInput
           style={styles.input}
-          placeholder="Aura'ya bir şeyler sor..."
+          placeholder="Namikaze AI'ya komut ver..."
           placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}

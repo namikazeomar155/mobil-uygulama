@@ -15,9 +15,8 @@ import { storageService } from '../services/storageService';
 import { bridgeService } from '../services/bridgeService';
 import { APP_CONFIG } from '../config';
 
-const CURRENT_VERSION = '2.0.0';
-const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Aura-AI.apk';
-const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
+const CURRENT_VERSION = '3.0.0';
+const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
 
 export default function SettingsScreen() {
   const [geminiKey, setGeminiKey] = useState('');
@@ -57,8 +56,11 @@ export default function SettingsScreen() {
   const handleTestBridge = async () => {
     setTestingKey(true);
     setTestResult(null);
+    await bridgeService.discoverBridgeUrl(true);
     const status = await bridgeService.getStatus();
     if (status && status.ok) {
+      const discovered = await bridgeService.discoverBridgeUrl(false);
+      setActiveBridgeUrl(discovered || '');
       setTestResult({
         success: true,
         msg: `🟢 Laptop Bağlantısı Başarılı! (${status.hostname} • RAM: ${status.ramUsedGB}/${status.ramTotalGB} GB)`
@@ -76,9 +78,8 @@ export default function SettingsScreen() {
     setCheckingUpdate(true);
     setUpdateInfo(null);
     try {
-      const res = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
-      if (res.ok) {
-        const remote = await res.json();
+      const remote = await bridgeService.fetchRemoteConfig();
+      if (remote) {
         if (remote.version && remote.version !== CURRENT_VERSION) {
           setUpdateInfo({
             hasUpdate: true,
@@ -90,6 +91,11 @@ export default function SettingsScreen() {
             msg: `✅ Uygulamanız güncel (v${CURRENT_VERSION}). Yine de son APK'yı indirmek için yan butonu kullanabilirsiniz.`
           });
         }
+      } else {
+        setUpdateInfo({
+          hasUpdate: false,
+          msg: 'Güncelleme sunucusuna ulaşılamadı.'
+        });
       }
     } catch (e) {
       setUpdateInfo({
@@ -159,7 +165,7 @@ export default function SettingsScreen() {
           style={styles.input}
           value={customBridgeUrl}
           onChangeText={setCustomBridgeUrl}
-          placeholder="Otomatik (https://....lhr.life)"
+          placeholder="Otomatik (Cloudflare / SSH Tünel)"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
@@ -221,7 +227,7 @@ export default function SettingsScreen() {
         <Text style={styles.cardTitle}>Sistem Bilgisi</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Uygulama:</Text>
-          <Text style={styles.infoValue}>Nexus PC & Antigravity Remote</Text>
+          <Text style={styles.infoValue}>Namikaze AI (PC & Antigravity Remote)</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Versiyon:</Text>

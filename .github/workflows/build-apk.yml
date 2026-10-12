@@ -37,7 +37,7 @@ jobs:
             const k = process.env.SECRET_KEY || "";
             const bytes = Array.from(k).map((c, i) => c.charCodeAt(0) ^ ((i * 7 + 42) & 0xff));
             const fs = require("fs");
-            fs.writeFileSync("src/config.js", `const _b = ${JSON.stringify(bytes)};\nexport const APP_CONFIG = {\n  get GEMINI_API_KEY() { return _b.map((b, i) => String.fromCharCode(b ^ ((i * 7 + 42) & 0xff))).join(""); },\n  DEFAULT_USER: "Dostum"\n};\n`);
+            fs.writeFileSync("src/config.js", `const _b = ${JSON.stringify(bytes)};\nexport const APP_CONFIG = {\n  get GEMINI_API_KEY() { return _b.map((b, i) => String.fromCharCode(b ^ ((i * 7 + 42) & 0xff))).join(""); },\n  DEFAULT_USER: "Omar"\n};\n`);
           '
 
       - name: Install dependencies
@@ -46,29 +46,42 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Build Release APK
+      - name: Enable Cleartext LAN Traffic & Build Release APK
         working-directory: ./android
         run: |
+          node -e '
+            const fs = require("fs");
+            const mf = "app/src/main/AndroidManifest.xml";
+            let xml = fs.readFileSync(mf, "utf8");
+            if (!xml.includes("usesCleartextTraffic")) {
+              xml = xml.replace("<application", "<application android:usesCleartextTraffic=\"true\"");
+              fs.writeFileSync(mf, xml, "utf8");
+            }
+          '
           sed -i "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.25')/g" build.gradle
           chmod +x gradlew
           ./gradlew assembleRelease -Pandroid.kotlinVersion=1.9.25 --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk Aura-AI.apk
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk Namikaze-AI.apk
+          cp android/app/build/outputs/apk/release/app-release.apk Aura-AI.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Aura-AI-APK
-          path: Aura-AI.apk
+          name: Namikaze-AI-APK
+          path: Namikaze-AI.apk
 
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "Aura AI v1.0.0 (Android APK)"
-          body: "Android telefonunuza doğrudan indirip kurabileceğiniz tam sürüm **Aura-AI.apk** dosyası."
-          files: Aura-AI.apk
+          tag_name: v3.0.0
+          name: "Namikaze AI v3.0.0 (Android APK)"
+          body: "Özel **Namikaze AI** logosu, ismi ve çift katmanlı (Cloudflare + SSH + LAN) kesintisiz laptop bağlantısına sahip **Namikaze-AI.apk** sürümü."
+          files: |
+            Namikaze-AI.apk
+            Aura-AI.apk
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

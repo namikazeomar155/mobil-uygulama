@@ -6,10 +6,25 @@ const path = require('path');
 
 const PORT = 4040;
 const QUEUE_DIR = path.join(__dirname, '..', '.agents', 'queue');
-let currentTunnelUrl = '';
+const CLOUDFLARED_BIN = path.join(__dirname, 'cloudflared.exe');
+
+let primaryTunnelUrl = '';
+let backupTunnelUrl = '';
 
 if (!fs.existsSync(QUEUE_DIR)) {
   fs.mkdirSync(QUEUE_DIR, { recursive: true });
+}
+
+function getLocalLanIp() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal && net.address.startsWith('192.168.')) {
+        return net.address;
+      }
+    }
+  }
+  return '192.168.178.59';
 }
 
 function runPowerShell(psCommand) {
@@ -25,57 +40,116 @@ function runPowerShell(psCommand) {
   });
 }
 
-// GitHub remote-config.json içine canlı tünel adresini otomatik kaydet
-async function syncTunnelToGitHub(tunnelUrl) {
+let isSyncing = false;
+let pendingSync = false;
+async function syncTunnelToGitHub() {
+  if (isSyncing) {
+    pendingSync = true;
+    return;
+  }
+  const bestUrl = primaryTunnelUrl || backupTunnelUrl;
+  if (!bestUrl) return;
+  isSyncing = true;
+  pendingSync = false;
   try {
+    const lanUrl = `http://${getLocalLanIp()}:${PORT}`;
+    const cfgPath = path.join(__dirname, '..', 'remote-config.json');
+    let currentCfg = { version: '3.0.0', announcement: '' };
+    if (fs.existsSync(cfgPath)) {
+      try {
+        currentCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      } catch (e) {}
+    }
+    currentCfg.version = '3.0.0';
+    currentCfg.bridgeUrl = bestUrl;
+    currentCfg.backupTunnelUrl = backupTunnelUrl || bestUrl;
+    currentCfg.lanUrl = lanUrl;
+    currentCfg.updatedAt = new Date().toISOString();
+
+    const jsonStr = JSON.stringify(currentCfg, null, 2);
+    fs.writeFileSync(cfgPath, jsonStr, 'utf8');
+
+    const b64Content = Buffer.from(jsonStr, 'utf8').toString('base64');
     const ps = `
       $cred = "protocol=https\`nhost=github.com\`n" | git credential fill
       $token = ($cred | Select-String "password=(.*)").Matches.Groups[1].Value
       $headers = @{ Authorization = "Bearer $token"; Accept = "application/vnd.github+json" }
       $file = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/namikazeomar155/mobil-uygulama/contents/remote-config.json"
-      $cfgPath = Join-Path "${path.join(__dirname, '..').replace(/\\/g, '\\\\')}" "remote-config.json"
-      $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
-      $cfg | Add-Member -NotePropertyName "bridgeUrl" -NotePropertyValue "${tunnelUrl}" -Force
-      $cfg | Add-Member -NotePropertyName "lanUrl" -NotePropertyValue "http://192.168.178.59:4040" -Force
-      $json = $cfg | ConvertTo-Json -Depth 4
-      Set-Content -Path $cfgPath -Value $json -Encoding UTF8
-      $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
-      $body = @{ message = "chore: auto-sync live laptop bridge URL [skip ci]"; content = $b64; sha = $file.sha } | ConvertTo-Json
+      $body = @{ message = "chore: auto-sync live laptop bridge URL [skip ci]"; content = "${b64Content}"; sha = $file.sha } | ConvertTo-Json
       Invoke-RestMethod -Method Put -Headers $headers -Uri "https://api.github.com/repos/namikazeomar155/mobil-uygulama/contents/remote-config.json" -Body $body | Out-Null
       "SYNC_OK"
     `;
     const res = await runPowerShell(ps);
-    console.log('🔗 Tünel GitHub ile senkronize edildi:', tunnelUrl, res.output);
+    console.log('🔗 Tünel GitHub ile senkronize edildi:', { bestUrl, backupTunnelUrl, lanUrl }, res.output);
   } catch (e) {
     console.error('Tunnel sync error:', e.message);
+  } finally {
+    isSyncing = false;
+    if (pendingSync) {
+      setTimeout(syncTunnelToGitHub, 1500);
+    }
   }
 }
 
-// Otomatik yenilenen SSH HTTPS Tüneli
-function startAutoTunnel() {
-  console.log('🌐 HTTPS Tüneli başlatılıyor...');
-  const ssh = spawn('ssh', [
-    '-o', 'StrictHostKeyChecking=no',
-    '-o', 'ServerAliveInterval=30',
-    '-R', `80:localhost:${PORT}`,
-    'nokey@localhost.run'
+// 1. Birincil Kararlı Tünel: Cloudflare Quick Tunnel (trycloudflare.com)
+function startCloudflareTunnel() {
+  if (!fs.existsSync(CLOUDFLARED_BIN)) {
+    console.log('⚠️ cloudflared.exe bulunamadı, yalnızca SSH tüneli kullanılacak.');
+    return;
+  }
+  console.log('☁️ Cloudflare HTTPS Tüneli başlatılıyor...');
+  const cf = spawn(CLOUDFLARED_BIN, [
+    'tunnel',
+    '--url', `http://127.0.0.1:${PORT}`,
+    '--no-autoupdate'
   ]);
 
-  const handleData = (data) => {
+  const handleCfData = (data) => {
     const text = data.toString();
-    const match = text.match(/https:\/\/[a-z0-9]+\.lhr\.life/i);
-    if (match && match[0] !== currentTunnelUrl) {
-      currentTunnelUrl = match[0];
-      console.log('✅ Yeni Canlı Tünel Adresi:', currentTunnelUrl);
-      syncTunnelToGitHub(currentTunnelUrl);
+    const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+    if (match && match[0] !== primaryTunnelUrl) {
+      primaryTunnelUrl = match[0];
+      console.log('✅ Birincil Cloudflare Tüneli Aktif:', primaryTunnelUrl);
+      syncTunnelToGitHub();
     }
   };
 
-  ssh.stdout.on('data', handleData);
-  ssh.stderr.on('data', handleData);
+  cf.stdout.on('data', handleCfData);
+  cf.stderr.on('data', handleCfData);
+  cf.on('close', () => {
+    console.log('🔄 Cloudflare tüneli kapandı, 3sn içinde yeniden başlatılıyor...');
+    primaryTunnelUrl = '';
+    setTimeout(startCloudflareTunnel, 3000);
+  });
+}
+
+// 2. İkincil Yedek Tünel: localhost.run (127.0.0.1 IPv4 zorlamalı - 502 hatasını önler)
+function startBackupSshTunnel() {
+  console.log('🌐 Yedek SSH HTTPS Tüneli başlatılıyor...');
+  const ssh = spawn('ssh', [
+    '-o', 'StrictHostKeyChecking=no',
+    '-o', 'ServerAliveInterval=30',
+    '-o', 'ExitOnForwardFailure=yes',
+    '-R', `80:127.0.0.1:${PORT}`,
+    'nokey@localhost.run'
+  ]);
+
+  const handleSshData = (data) => {
+    const text = data.toString();
+    const match = text.match(/https:\/\/[a-z0-9]+\.lhr\.life/i);
+    if (match && match[0] !== backupTunnelUrl) {
+      backupTunnelUrl = match[0];
+      console.log('✅ Yedek SSH Tüneli Aktif:', backupTunnelUrl);
+      syncTunnelToGitHub();
+    }
+  };
+
+  ssh.stdout.on('data', handleSshData);
+  ssh.stderr.on('data', handleSshData);
   ssh.on('close', () => {
-    console.log('🔄 Tünel kapandı, 3 saniye içinde yeniden bağlanılıyor...');
-    setTimeout(startAutoTunnel, 3000);
+    console.log('🔄 Yedek SSH tüneli yenileniyor...');
+    backupTunnelUrl = '';
+    setTimeout(startBackupSshTunnel, 4000);
   });
 }
 
@@ -101,7 +175,7 @@ function getCpuUsagePercent() {
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Bypass-Tunnel-Reminder');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
@@ -111,7 +185,7 @@ const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
   // 1. CANLI SİSTEM DURUMU (/status)
-  if (req.method === 'GET' && url === '/status') {
+  if (req.method === 'GET' && (url === '/status' || url === '/')) {
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;
@@ -137,7 +211,8 @@ const server = http.createServer(async (req, res) => {
       ramPercent,
       batteryPercent: parseInt(batPct, 10) || 100,
       isCharging: batStatus !== '1',
-      tunnelUrl: currentTunnelUrl,
+      tunnelUrl: primaryTunnelUrl || backupTunnelUrl,
+      lanUrl: `http://${getLocalLanIp()}:${PORT}`,
       timestamp: new Date().toLocaleTimeString('tr-TR'),
     }));
   }
@@ -285,7 +360,9 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`⚡ Nexus PC Bridge Server aktif: http://localhost:${PORT}`);
-  startAutoTunnel();
+// Dual-stack (IPv4 + IPv6) dinleme ile hem 127.0.0.1 hem ::1 hem de yerel Wi-Fi (192.168.x.x) isteklerini kabul et
+server.listen(PORT, () => {
+  console.log(`⚡ Namikaze AI PC Bridge Server aktif: http://127.0.0.1:${PORT} & http://${getLocalLanIp()}:${PORT}`);
+  startCloudflareTunnel();
+  startBackupSshTunnel();
 });

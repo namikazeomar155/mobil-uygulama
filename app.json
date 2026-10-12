@@ -1,14 +1,16 @@
 {
   "expo": {
-    "name": "Aura AI",
+    "name": "Namikaze AI",
     "slug": "mobil-uygulama",
-    "version": "1.0.0",
+    "version": "3.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": false,
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0B0F19"
+      "backgroundColor": "#FAF1EE"
     },
     "ios": {
       "supportsTablet": true,
@@ -17,11 +19,13 @@
     "android": {
       "package": "com.omar.auraai",
       "adaptiveIcon": {
-        "backgroundColor": "#0B0F19"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FAF1EE"
       }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/icon.png"
     }
   }
 }

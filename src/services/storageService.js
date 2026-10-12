@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_CONFIG } from '../config';
 
 const STORAGE_KEYS = {
-  SETTINGS: '@nexus_settings_v2',
-  CHAT_HISTORY: '@nexus_chat_v2',
+  SETTINGS: '@namikaze_settings_v3',
+  CHAT_HISTORY: '@namikaze_chat_v3',
 };
 
 export const storageService = {
@@ -46,7 +46,7 @@ export const storageService = {
         {
           id: 'welcome',
           sender: 'ai',
-          text: '⚡ Nexus PC & Antigravity Komutanı hazır, Omar!\n\nBana doğrudan Türkçe komut verebilirsin:\n• "Masaüstündeki dosyaları listele"\n• "Bilgisayarın sesini aç"\n• "Laptopta YouTube aç"\n• "RAM\'i en çok kullanan 5 programı göster"',
+          text: '⚡ Namikaze AI & Antigravity Komutanı hazır, Omar!\n\nBana doğrudan Türkçe komut verebilirsin:\n• "Masaüstündeki dosyaları listele"\n• "Bilgisayarın sesini aç"\n• "Laptopta YouTube aç"\n• "RAM\'i en çok kullanan 5 programı göster"',
           timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
         }
       ];

@@ -15,9 +15,8 @@ import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { bridgeService } from '../services/bridgeService';
 
-const CURRENT_VERSION = '2.0.0';
-const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Aura-AI.apk';
-const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
+const CURRENT_VERSION = '3.0.0';
+const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
 
 export default function HomeScreen({ onNavigate }) {
   const [status, setStatus] = useState(null);
@@ -28,7 +27,10 @@ export default function HomeScreen({ onNavigate }) {
   const [urlInput, setUrlInput] = useState('');
   const [remoteConfig, setRemoteConfig] = useState(null);
 
-  const loadTelemetry = async () => {
+  const loadTelemetry = async (forceRefresh = false) => {
+    if (forceRefresh) {
+      await bridgeService.discoverBridgeUrl(true);
+    }
     const res = await bridgeService.getStatus();
     if (res && res.ok) {
       setStatus(res);
@@ -37,23 +39,22 @@ export default function HomeScreen({ onNavigate }) {
     }
 
     try {
-      const r = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
-      if (r.ok) {
-        const cfg = await r.json();
+      const cfg = await bridgeService.fetchRemoteConfig();
+      if (cfg) {
         setRemoteConfig(cfg);
       }
     } catch (e) {}
   };
 
   useEffect(() => {
-    loadTelemetry();
-    const timer = setInterval(loadTelemetry, 8000);
+    loadTelemetry(true);
+    const timer = setInterval(() => loadTelemetry(false), 8000);
     return () => clearInterval(timer);
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadTelemetry();
+    await loadTelemetry(true);
     setRefreshing(false);
   };
 
@@ -92,8 +93,19 @@ export default function HomeScreen({ onNavigate }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       <Header
-        subtitle={status ? `🟢 ${status.hostname} • AKTİF (${status.uptimeHours}s)` : '🔴 LAPTOP ARANIYOR...'}
-        title="Nexus PC Kumanda ⚡"
+        subtitle={status ? `🟢 ${status.hostname} • BAĞLI (${status.uptimeHours}s)` : '🔴 LAPTOP BAĞLANTISI ARANIYOR...'}
+        title="Namikaze AI"
+        rightElement={
+          <TouchableOpacity
+            style={styles.captureBtn}
+            onPress={() => {
+              showToast('🔄 Laptop köprüsü yenileniyor...');
+              loadTelemetry(true);
+            }}
+          >
+            <Text style={styles.captureBtnText}>{status ? '🟢 Bağlı' : '🔄 Bağlan'}</Text>
+          </TouchableOpacity>
+        }
       />
 
       {/* OTOMATİK GÜNCELLEME BİLDİRİMİ */}
