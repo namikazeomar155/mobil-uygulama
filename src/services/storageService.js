@@ -132,15 +132,21 @@ export const storageService = {
   async getSettings() {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (data) return JSON.parse(data);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (!parsed.geminiApiKey || parsed.geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE') {
+          parsed.geminiApiKey = LOCAL_CONFIG?.GEMINI_API_KEY || '';
+        }
+        return parsed;
+      }
       return {
         geminiApiKey: LOCAL_CONFIG?.GEMINI_API_KEY || '',
-        userName: LOCAL_CONFIG?.DEFAULT_USER || 'Kullanıcı',
+        userName: LOCAL_CONFIG?.DEFAULT_USER || 'Omar',
         isDarkMode: true,
       };
     } catch (e) {
       console.error('getSettings error:', e);
-      return { geminiApiKey: LOCAL_CONFIG?.GEMINI_API_KEY || '', userName: LOCAL_CONFIG?.DEFAULT_USER || 'Kullanıcı', isDarkMode: true };
+      return { geminiApiKey: LOCAL_CONFIG?.GEMINI_API_KEY || '', userName: LOCAL_CONFIG?.DEFAULT_USER || 'Omar', isDarkMode: true };
     }
   },
 
