@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LOCAL_CONFIG } from '../config.local';
+import { APP_CONFIG } from '../config';
 
 const STORAGE_KEYS = {
   HABITS: '@aura_habits',
@@ -135,18 +135,18 @@ export const storageService = {
       if (data) {
         const parsed = JSON.parse(data);
         if (!parsed.geminiApiKey || parsed.geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE') {
-          parsed.geminiApiKey = LOCAL_CONFIG?.GEMINI_API_KEY || '';
+          parsed.geminiApiKey = APP_CONFIG?.GEMINI_API_KEY || '';
         }
         return parsed;
       }
       return {
-        geminiApiKey: LOCAL_CONFIG?.GEMINI_API_KEY || '',
-        userName: LOCAL_CONFIG?.DEFAULT_USER || 'Omar',
+        geminiApiKey: APP_CONFIG?.GEMINI_API_KEY || '',
+        userName: APP_CONFIG?.DEFAULT_USER || 'Omar',
         isDarkMode: true,
       };
     } catch (e) {
       console.error('getSettings error:', e);
-      return { geminiApiKey: LOCAL_CONFIG?.GEMINI_API_KEY || '', userName: LOCAL_CONFIG?.DEFAULT_USER || 'Omar', isDarkMode: true };
+      return { geminiApiKey: APP_CONFIG?.GEMINI_API_KEY || '', userName: APP_CONFIG?.DEFAULT_USER || 'Omar', isDarkMode: true };
     }
   },
 

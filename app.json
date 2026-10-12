@@ -1,26 +1,26 @@
 {
   "expo": {
-    "name": "Aura - AI Yaşam Asistanı",
+    "name": "Aura AI",
     "slug": "mobil-uygulama",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": false,
     "splash": {
       "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
+      "backgroundColor": "#0B0F19"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.omar.auraai"
     },
     "android": {
+      "package": "com.omar.auraai",
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#0B0F19"
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png",
       "bundler": "metro"
     }
   }

@@ -1,5 +1,5 @@
 import { storageService } from './storageService';
-import { LOCAL_CONFIG } from '../config.local';
+import { APP_CONFIG } from '../config';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
 
@@ -12,7 +12,7 @@ export const aiService = {
     let apiKey = settings.geminiApiKey;
 
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey.trim() === '') {
-      apiKey = LOCAL_CONFIG?.GEMINI_API_KEY || '';
+      apiKey = APP_CONFIG?.GEMINI_API_KEY || '';
     }
 
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey.trim() === '') {
