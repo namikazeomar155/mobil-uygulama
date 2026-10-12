@@ -134,19 +134,19 @@ export const storageService = {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (data) {
         const parsed = JSON.parse(data);
-        if (!parsed.geminiApiKey || parsed.geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE') {
-          parsed.geminiApiKey = APP_CONFIG?.GEMINI_API_KEY || '';
+        if (parsed.geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE' || parsed.geminiApiKey === APP_CONFIG?.GEMINI_API_KEY) {
+          parsed.geminiApiKey = '';
         }
         return parsed;
       }
       return {
-        geminiApiKey: APP_CONFIG?.GEMINI_API_KEY || '',
-        userName: APP_CONFIG?.DEFAULT_USER || 'Omar',
+        geminiApiKey: '',
+        userName: APP_CONFIG?.DEFAULT_USER || 'Dostum',
         isDarkMode: true,
       };
     } catch (e) {
       console.error('getSettings error:', e);
-      return { geminiApiKey: APP_CONFIG?.GEMINI_API_KEY || '', userName: APP_CONFIG?.DEFAULT_USER || 'Omar', isDarkMode: true };
+      return { geminiApiKey: '', userName: 'Dostum', isDarkMode: true };
     }
   },
 

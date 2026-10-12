@@ -6,10 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { storageService } from '../services/storageService';
+
+const CURRENT_VERSION = '1.1.0';
+const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Aura-AI.apk';
+const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
 
 const MOODS = [
   { emoji: '⚡', label: 'Enerjik' },
@@ -23,13 +28,24 @@ export default function HomeScreen({ onNavigate }) {
   const [habits, setHabits] = useState([]);
   const [selectedMood, setSelectedMood] = useState('✨');
   const [refreshing, setRefreshing] = useState(false);
-  const [settings, setSettings] = useState({ userName: 'Kullanıcı' });
+  const [settings, setSettings] = useState({ userName: 'Dostum' });
+  const [remoteConfig, setRemoteConfig] = useState(null);
 
   const loadData = async () => {
     const loadedHabits = await storageService.getHabits();
     const loadedSettings = await storageService.getSettings();
     setHabits(loadedHabits);
     setSettings(loadedSettings);
+
+    try {
+      const res = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRemoteConfig(data);
+      }
+    } catch (e) {
+      // Çevrimdışıysa sessizce devam et
+    }
   };
 
   useEffect(() => {
@@ -56,6 +72,7 @@ export default function HomeScreen({ onNavigate }) {
 
   const completedCount = habits.filter(h => h.completedToday).length;
   const progressPercent = habits.length > 0 ? Math.round((completedCount / habits.length) * 100) : 0;
+  const hasNewUpdate = remoteConfig?.version && remoteConfig.version !== CURRENT_VERSION;
 
   return (
     <ScrollView
@@ -67,6 +84,33 @@ export default function HomeScreen({ onNavigate }) {
         subtitle={new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
         title={`${getGreeting()}, ${settings.userName || 'Dostum'} 👋`}
       />
+
+      {/* OTOMATİK YENİ SÜRÜM BİLDİRİMİ */}
+      {hasNewUpdate && (
+        <TouchableOpacity
+          style={[styles.cardHighlight, { borderColor: colors.success, marginBottom: 8 }]}
+          onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+        >
+          <Text style={[styles.cardTitle, { color: colors.success, fontSize: 15 }]}>
+            🚀 Yeni Güncelleme Hazır (v{remoteConfig.version})!
+          </Text>
+          <Text style={[styles.cardSub, { marginBottom: 0 }]}>
+            Eski uygulamayı silmeden tek dokunuşla üzerine güncellemek için buraya dokunun.
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* CANLI UZAKTAN DUYURU KARTI */}
+      {remoteConfig?.announcement ? (
+        <View style={[styles.cardHighlight, { borderColor: colors.primaryLight, marginBottom: 8 }]}>
+          <Text style={[styles.cardTitle, { fontSize: 14, color: colors.primaryLight }]}>
+            📢 Günün Mesajı
+          </Text>
+          <Text style={[styles.cardSub, { marginBottom: 0, color: colors.text }]}>
+            {remoteConfig.announcement}
+          </Text>
+        </View>
+      ) : null}
 
       {/* GÜNLÜK İLERLEME KARTI */}
       <View style={styles.cardHighlight}>

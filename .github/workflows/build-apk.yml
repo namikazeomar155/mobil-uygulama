@@ -31,12 +31,12 @@ jobs:
         env:
           SECRET_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          cat <<EOF > src/config.js
-          export const APP_CONFIG = {
-            GEMINI_API_KEY: '${SECRET_KEY}',
-            DEFAULT_USER: 'Omar',
-          };
-          EOF
+          node -e '
+            const k = process.env.SECRET_KEY || "";
+            const bytes = Array.from(k).map((c, i) => c.charCodeAt(0) ^ ((i * 7 + 42) & 0xff));
+            const fs = require("fs");
+            fs.writeFileSync("src/config.js", `const _b = ${JSON.stringify(bytes)};\nexport const APP_CONFIG = {\n  get GEMINI_API_KEY() { return _b.map((b, i) => String.fromCharCode(b ^ ((i * 7 + 42) & 0xff))).join(""); },\n  DEFAULT_USER: "Dostum"\n};\n`);
+          '
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps

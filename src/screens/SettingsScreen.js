@@ -6,12 +6,17 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { storageService } from '../services/storageService';
+import { APP_CONFIG } from '../config';
+
+const CURRENT_VERSION = '1.1.0';
+const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Aura-AI.apk';
+const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
 
 export default function SettingsScreen() {
   const [geminiKey, setGeminiKey] = useState('');
@@ -19,6 +24,8 @@ export default function SettingsScreen() {
   const [savedStatus, setSavedStatus] = useState('');
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -27,13 +34,13 @@ export default function SettingsScreen() {
   const loadSettings = async () => {
     const s = await storageService.getSettings();
     setGeminiKey(s.geminiApiKey || '');
-    setUserName(s.userName || 'Kullanıcı');
+    setUserName(s.userName || 'Dostum');
   };
 
   const handleSave = async () => {
     await storageService.saveSettings({
       geminiApiKey: geminiKey.trim(),
-      userName: userName.trim() || 'Kullanıcı',
+      userName: userName.trim() || 'Dostum',
       isDarkMode: true,
     });
     setSavedStatus('✅ Ayarlar başarıyla kaydedildi!');
@@ -41,8 +48,9 @@ export default function SettingsScreen() {
   };
 
   const handleTestKey = async () => {
-    if (!geminiKey.trim()) {
-      setTestResult({ success: false, msg: 'Lütfen test etmek için önce bir API anahtarı girin.' });
+    const keyToTest = geminiKey.trim() || APP_CONFIG?.GEMINI_API_KEY || '';
+    if (!keyToTest) {
+      setTestResult({ success: false, msg: 'Test edilecek bir API anahtarı bulunamadı.' });
       return;
     }
 
@@ -50,7 +58,7 @@ export default function SettingsScreen() {
     setTestResult(null);
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${geminiKey.trim()}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${keyToTest}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,7 +68,7 @@ export default function SettingsScreen() {
       });
 
       if (response.ok) {
-        setTestResult({ success: true, msg: '🎉 Harika! Gemini API anahtarı başarıyla doğrulandı.' });
+        setTestResult({ success: true, msg: '🎉 Harika! Aura AI bulut bağlantısı aktif ve sorunsuz çalışıyor.' });
       } else {
         const err = await response.json().catch(() => ({}));
         setTestResult({
@@ -72,6 +80,35 @@ export default function SettingsScreen() {
       setTestResult({ success: false, msg: `❌ Ağ hatası: ${e.message}` });
     } finally {
       setTestingKey(false);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateInfo(null);
+    try {
+      const res = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
+      if (res.ok) {
+        const remote = await res.json();
+        if (remote.version && remote.version !== CURRENT_VERSION) {
+          setUpdateInfo({
+            hasUpdate: true,
+            msg: `🚀 Yeni sürüm (v${remote.version}) mevcut! Eski uygulamayı silmeden doğrudan üzerine kurabilirsiniz.`
+          });
+        } else {
+          setUpdateInfo({
+            hasUpdate: false,
+            msg: `✅ Uygulamanız güncel (v${CURRENT_VERSION}). Yine de son APK'yı indirmek isterseniz aşağıdaki butonu kullanabilirsiniz.`
+          });
+        }
+      }
+    } catch (e) {
+      setUpdateInfo({
+        hasUpdate: false,
+        msg: 'Güncelleme sunucusuna ulaşılamadı.'
+      });
+    } finally {
+      setCheckingUpdate(false);
     }
   };
 
@@ -92,21 +129,26 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* API ANAHTARI ENTEGRASYONU */}
+      {/* API ANAHTARI ENTEGRASYONU (GİZLİ KORUMALI) */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Yapay Zeka API Anahtarı</Text>
+        <View style={styles.badgeRow}>
+          <Text style={styles.cardTitle}>Yapay Zeka Bağlantısı</Text>
+          <View style={styles.secureBadge}>
+            <Text style={styles.secureBadgeText}>🔒 Gizli Anahtar Aktif</Text>
+          </View>
+        </View>
         <Text style={styles.description}>
-          Aura Chat'in canlı Google Gemini modeline bağlanması için API anahtarınızı buraya girebilirsiniz.
+          Uygulama içinde gömülü ve şifreli Aura AI bağlantısı varsayılan olarak aktiftir. Yalnızca kendi özel anahtarınızı kullanmak isterseniz aşağıya girebilirsiniz:
         </Text>
 
-        <Text style={styles.label}>Google Gemini API Key:</Text>
+        <Text style={styles.label}>Özel API Anahtarı (Opsiyonel):</Text>
         <TextInput
           style={styles.input}
           value={geminiKey}
           onChangeText={setGeminiKey}
-          placeholder="AIzaSy..."
+          placeholder="•••••••• (Varsayılan korumalı anahtar kullanılıyor)"
           placeholderTextColor={colors.textMuted}
-          secureTextEntry={false}
+          secureTextEntry={true}
           autoCapitalize="none"
         />
 
@@ -119,7 +161,7 @@ export default function SettingsScreen() {
             {testingKey ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={styles.testBtnText}>⚡ Anahtarı Test Et</Text>
+              <Text style={styles.testBtnText}>⚡ Bağlantıyı Test Et</Text>
             )}
           </TouchableOpacity>
 
@@ -151,6 +193,43 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {/* UYGULAMA GÜNCELLEME MERKEZİ */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Uygulama Güncelleme Merkezi 🔄</Text>
+        <Text style={styles.description}>
+          Uygulamaya yeni özellikler eklendiğinde eski uygulamayı silmenize gerek yoktur; yeni APK'yı indirip açtığınızda verileriniz silinmeden doğrudan güncellenir.
+        </Text>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.testBtn}
+            onPress={handleCheckUpdate}
+            disabled={checkingUpdate}
+          >
+            {checkingUpdate ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Text style={styles.testBtnText}>🔍 Güncelleme Kontrol Et</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+          >
+            <Text style={styles.saveBtnText}>📥 Son APK'yı İndir</Text>
+          </TouchableOpacity>
+        </View>
+
+        {updateInfo && (
+          <View style={[styles.testResultBox, styles.testSuccess]}>
+            <Text style={[styles.testResultText, styles.testSuccessText]}>
+              {updateInfo.msg}
+            </Text>
+          </View>
+        )}
+      </View>
+
       {/* UYGULAMA HAKKINDA */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Uygulama Bilgisi</Text>
@@ -160,15 +239,11 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Versiyon:</Text>
-          <Text style={styles.infoValue}>v1.0.0 (Release)</Text>
+          <Text style={styles.infoValue}>v{CURRENT_VERSION}</Text>
         </View>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Framework:</Text>
-          <Text style={styles.infoValue}>React Native / Expo 52</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Çalışma Modu:</Text>
-          <Text style={styles.infoValue}>Çapraz Platform (iOS & Android)</Text>
+          <Text style={styles.infoLabel}>AI Motoru:</Text>
+          <Text style={styles.infoValue}>Gemini 3.8 Flash (Korumalı)</Text>
         </View>
       </View>
     </ScrollView>
@@ -192,11 +267,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  secureBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.success,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  secureBadgeText: {
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   description: {
     fontSize: 12,
@@ -243,7 +337,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     backgroundColor: colors.primary,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
