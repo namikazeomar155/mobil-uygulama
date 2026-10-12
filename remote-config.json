@@ -1,8 +1,8 @@
 {
-    "version":  "3.0.0",
-    "updatedAt":  "2026-10-13T00:07:56.2378630+02:00",
-    "announcement":  "Namikaze AI v3.0 - Yeni Logo, İsim ve Çift Katmanlı Cloudflare + SSH Laptop Bağlantısı!",
-    "backupTunnelUrl":  "https://1caf93e38c1e8e.lhr.life",
-    "lanUrl":  "http://192.168.178.59:4040",
-    "bridgeUrl":  "https://regions-consistency-intimate-repairs.trycloudflare.com"
+  "version": "3.0.0",
+  "announcement": "",
+  "bridgeUrl": "https://ef12893deaa0a4.lhr.life",
+  "backupTunnelUrl": "https://ef12893deaa0a4.lhr.life",
+  "lanUrl": "http://192.168.178.59:4040",
+  "updatedAt": "2026-10-12T22:09:09.437Z"
 }
