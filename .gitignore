@@ -14,6 +14,7 @@ npm-debug.*
 .env
 .env.local
 .env.production
+src/config.local.js
 
 # macOS
 .DS_Store

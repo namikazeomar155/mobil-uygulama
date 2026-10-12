@@ -1,4 +1,5 @@
 import { storageService } from './storageService';
+import { LOCAL_CONFIG } from '../config.local';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
@@ -8,7 +9,7 @@ export const aiService = {
    */
   async sendMessage(userMessage, conversationHistory = []) {
     const settings = await storageService.getSettings();
-    let apiKey = settings.geminiApiKey || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+    let apiKey = settings.geminiApiKey || LOCAL_CONFIG?.GEMINI_API_KEY || '';
 
     // Anahtar geçerli bir anahtar değilse veya yer tutucuysa akıllı simülasyon yanıtı ver
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey.trim() === '') {
