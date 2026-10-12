@@ -3,6 +3,8 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'remote-config.json'
   workflow_dispatch:
 
 permissions:

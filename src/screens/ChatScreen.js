@@ -16,10 +16,10 @@ import { aiService } from '../services/aiService';
 import { storageService } from '../services/storageService';
 
 const SUGGESTIONS = [
-  'Günün 3 önceliğini belirle 🎯',
-  'Bugün biraz moralsizim 🌿',
-  'Su içmeyi neden unutuyorum? 💧',
-  'Daha iyi odaklanma taktiği ver ⚡',
+  'Masaüstündeki dosyaları listele 📂',
+  'En çok RAM harcayan 5 programı göster 📊',
+  'Laptopta YouTube aç ▶️',
+  'Sistem ve ekran kartı bilgilerini getir 💻',
 ];
 
 export default function ChatScreen() {
@@ -91,8 +91,8 @@ export default function ChatScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <Header
-        subtitle="Yapay Zeka Koçu"
-        title="Aura Chat 🤖"
+        subtitle="Antigravity & PC Köprüsü"
+        title="Komutan AI 🤖"
         rightElement={
           <TouchableOpacity onPress={handleClear} style={styles.clearBtn}>
             <Text style={styles.clearBtnText}>Temizle</Text>
@@ -124,7 +124,7 @@ export default function ChatScreen() {
           loading ? (
             <View style={styles.loadingBubble}>
               <ActivityIndicator size="small" color={colors.primaryLight} />
-              <Text style={styles.loadingText}>Aura düşünüyor...</Text>
+              <Text style={styles.loadingText}>Komut işleniyor ve laptopa iletiliyor...</Text>
             </View>
           ) : null
         }

@@ -6,72 +6,83 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Image,
+  TextInput,
+  ActivityIndicator,
   Linking,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
-import { storageService } from '../services/storageService';
+import { bridgeService } from '../services/bridgeService';
 
-const CURRENT_VERSION = '1.1.0';
+const CURRENT_VERSION = '2.0.0';
 const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Aura-AI.apk';
 const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
 
-const MOODS = [
-  { emoji: '⚡', label: 'Enerjik' },
-  { emoji: '✨', label: 'Harika' },
-  { emoji: '🌿', label: 'Sakin' },
-  { emoji: '☕', label: 'Yorgun' },
-  { emoji: '🎯', label: 'Odaklı' },
-];
-
 export default function HomeScreen({ onNavigate }) {
-  const [habits, setHabits] = useState([]);
-  const [selectedMood, setSelectedMood] = useState('✨');
+  const [status, setStatus] = useState(null);
+  const [screenshot, setScreenshot] = useState(null);
+  const [loadingShot, setLoadingShot] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [settings, setSettings] = useState({ userName: 'Dostum' });
+  const [actionToast, setActionToast] = useState('');
+  const [urlInput, setUrlInput] = useState('');
   const [remoteConfig, setRemoteConfig] = useState(null);
 
-  const loadData = async () => {
-    const loadedHabits = await storageService.getHabits();
-    const loadedSettings = await storageService.getSettings();
-    setHabits(loadedHabits);
-    setSettings(loadedSettings);
+  const loadTelemetry = async () => {
+    const res = await bridgeService.getStatus();
+    if (res && res.ok) {
+      setStatus(res);
+    } else {
+      setStatus(null);
+    }
 
     try {
-      const res = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRemoteConfig(data);
+      const r = await fetch(`${REMOTE_CONFIG_URL}?t=${Date.now()}`);
+      if (r.ok) {
+        const cfg = await r.json();
+        setRemoteConfig(cfg);
       }
-    } catch (e) {
-      // Çevrimdışıysa sessizce devam et
-    }
+    } catch (e) {}
   };
 
   useEffect(() => {
-    loadData();
+    loadTelemetry();
+    const timer = setInterval(loadTelemetry, 8000);
+    return () => clearInterval(timer);
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadTelemetry();
     setRefreshing(false);
   };
 
-  const handleToggleHabit = async (id) => {
-    const updated = await storageService.toggleHabit(id);
-    setHabits(updated);
+  const handleCaptureScreen = async () => {
+    setLoadingShot(true);
+    const res = await bridgeService.getScreenshot();
+    if (res && res.ok && res.image) {
+      setScreenshot({ uri: res.image, time: res.timestamp });
+    } else {
+      showToast('⚠️ Ekran görüntüsü alınamadı');
+    }
+    setLoadingShot(false);
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Günaydın';
-    if (hour < 18) return 'Tünaydın';
-    return 'İyi Akşamlar';
+  const handleQuickAction = async (action, target = '') => {
+    showToast('⚡ Komut gönderiliyor...');
+    const res = await bridgeService.sendAction(action, target);
+    if (res && res.ok) {
+      showToast(res.output || '✅ Komut uygulandı');
+    } else {
+      showToast(`❌ Hata: ${res?.error || 'Bağlantı yok'}`);
+    }
   };
 
-  const completedCount = habits.filter(h => h.completedToday).length;
-  const progressPercent = habits.length > 0 ? Math.round((completedCount / habits.length) * 100) : 0;
+  const showToast = (msg) => {
+    setActionToast(msg);
+    setTimeout(() => setActionToast(''), 3500);
+  };
+
   const hasNewUpdate = remoteConfig?.version && remoteConfig.version !== CURRENT_VERSION;
 
   return (
@@ -81,128 +92,197 @@ export default function HomeScreen({ onNavigate }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       <Header
-        subtitle={new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
-        title={`${getGreeting()}, ${settings.userName || 'Dostum'} 👋`}
+        subtitle={status ? `🟢 ${status.hostname} • AKTİF (${status.uptimeHours}s)` : '🔴 LAPTOP ARANIYOR...'}
+        title="Nexus PC Kumanda ⚡"
       />
 
-      {/* OTOMATİK YENİ SÜRÜM BİLDİRİMİ */}
+      {/* OTOMATİK GÜNCELLEME BİLDİRİMİ */}
       {hasNewUpdate && (
         <TouchableOpacity
-          style={[styles.cardHighlight, { borderColor: colors.success, marginBottom: 8 }]}
+          style={styles.updateBanner}
           onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
         >
-          <Text style={[styles.cardTitle, { color: colors.success, fontSize: 15 }]}>
-            🚀 Yeni Güncelleme Hazır (v{remoteConfig.version})!
-          </Text>
-          <Text style={[styles.cardSub, { marginBottom: 0 }]}>
-            Eski uygulamayı silmeden tek dokunuşla üzerine güncellemek için buraya dokunun.
+          <Text style={styles.updateTitle}>🚀 Yeni Sürüm Hazır (v{remoteConfig.version})!</Text>
+          <Text style={styles.updateSub}>
+            Eski uygulamayı silmeden tek dokunuşla üzerine güncellemek için dokunun.
           </Text>
         </TouchableOpacity>
       )}
 
-      {/* CANLI UZAKTAN DUYURU KARTI */}
-      {remoteConfig?.announcement ? (
-        <View style={[styles.cardHighlight, { borderColor: colors.primaryLight, marginBottom: 8 }]}>
-          <Text style={[styles.cardTitle, { fontSize: 14, color: colors.primaryLight }]}>
-            📢 Günün Mesajı
-          </Text>
-          <Text style={[styles.cardSub, { marginBottom: 0, color: colors.text }]}>
-            {remoteConfig.announcement}
-          </Text>
+      {/* DURUM BİLDİRİM TOAST */}
+      {actionToast !== '' && (
+        <View style={styles.toastBox}>
+          <Text style={styles.toastText}>{actionToast}</Text>
         </View>
-      ) : null}
+      )}
 
-      {/* GÜNLÜK İLERLEME KARTI */}
-      <View style={styles.cardHighlight}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>Bugünkü İlerlemen</Text>
-          <View style={styles.percentBadge}>
-            <Text style={styles.percentText}>%{progressPercent}</Text>
+      {/* CANLI DONANIM GÖSTERGELERİ (CPU / RAM / BATARYA) */}
+      <View style={styles.metricsRow}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>İŞLEMCİ (CPU)</Text>
+          <Text style={styles.metricValue}>{status ? `%${status.cpuPercent}` : '--'}</Text>
+          <View style={styles.miniBarBg}>
+            <View style={[styles.miniBarFill, { width: `${status?.cpuPercent || 0}%`, backgroundColor: colors.primary }]} />
           </View>
         </View>
 
-        <Text style={styles.cardSub}>
-          {completedCount} / {habits.length} alışkanlık tamamlandı
-        </Text>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>BELLEK (RAM)</Text>
+          <Text style={styles.metricValue}>{status ? `%${status.ramPercent}` : '--'}</Text>
+          <Text style={styles.metricSub}>{status ? `${status.ramUsedGB}/${status.ramTotalGB} GB` : ''}</Text>
+          <View style={styles.miniBarBg}>
+            <View style={[styles.miniBarFill, { width: `${status?.ramPercent || 0}%`, backgroundColor: colors.accent }]} />
+          </View>
+        </View>
 
-        <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>GÜÇ / PİL</Text>
+          <Text style={[styles.metricValue, { color: colors.success }]}>
+            {status ? `%${status.batteryPercent}` : '--'}
+          </Text>
+          <Text style={styles.metricSub}>{status?.isCharging ? '⚡ Şarjda' : '🔋 Pilde'}</Text>
         </View>
       </View>
 
-      {/* RUH HALİ SEÇİCİ */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Bugün Nasıl Hissediyorsun?</Text>
-        <View style={styles.moodRow}>
-          {MOODS.map((m) => (
+      {/* CANLI LAPTOP EKRAN GÖRÜNTÜSÜ (LIVE MONITOR) */}
+      <View style={styles.sectionCard}>
+        <View style={styles.cardHeaderRow}>
+          <View>
+            <Text style={styles.cardTitle}>🖥️ Canlı Laptop Ekranı</Text>
+            <Text style={styles.cardSubtitle}>
+              {screenshot ? `Son çekim: ${screenshot.time}` : 'Anlık masaüstü görüntüsü'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.captureBtn}
+            onPress={handleCaptureScreen}
+            disabled={loadingShot}
+          >
+            {loadingShot ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Text style={styles.captureBtnText}>📸 Ekranı Çek</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {screenshot ? (
+          <TouchableOpacity onPress={handleCaptureScreen} activeOpacity={0.9}>
+            <Image
+              source={{ uri: screenshot.uri }}
+              style={styles.screenshotImg}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.emptyMonitor} onPress={handleCaptureScreen}>
+            <Text style={styles.emptyMonitorIcon}>💻</Text>
+            <Text style={styles.emptyMonitorText}>
+              Laptop ekranını telefonunda görmek için dokun
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* HIZLI MEDYA & SES KUMANDASI */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.cardTitle}>🎛️ Hızlı Medya & Sistem Kumandası</Text>
+        <View style={styles.gridRow}>
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('volume_down')}>
+            <Text style={styles.deckIcon}>🔉</Text>
+            <Text style={styles.deckLabel}>Ses Kıs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('volume_mute')}>
+            <Text style={styles.deckIcon}>🔇</Text>
+            <Text style={styles.deckLabel}>Sessiz</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('volume_up')}>
+            <Text style={styles.deckIcon}>🔊</Text>
+            <Text style={styles.deckLabel}>Ses Aç</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.gridRow, { marginTop: 10 }]}>
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('media_play_pause')}>
+            <Text style={styles.deckIcon}>⏯️</Text>
+            <Text style={styles.deckLabel}>Oynat/Durdur</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('media_next')}>
+            <Text style={styles.deckIcon}>⏭️</Text>
+            <Text style={styles.deckLabel}>Sonraki</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.deckBtn, { borderColor: colors.danger }]}
+            onPress={() => handleQuickAction('lock_pc')}
+          >
+            <Text style={styles.deckIcon}>🔒</Text>
+            <Text style={[styles.deckLabel, { color: '#F87171' }]}>PC Kilitle</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* LAPTOPTA SİTE VEYA UYGULAMA BAŞLAT */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.cardTitle}>🚀 Laptopta Hızlı Başlat</Text>
+        <View style={styles.urlRow}>
+          <TextInput
+            style={styles.urlInput}
+            placeholder="Web adresi yaz (örn: youtube.com)..."
+            placeholderTextColor={colors.textMuted}
+            value={urlInput}
+            onChangeText={setUrlInput}
+            autoCapitalize="none"
+          />
+          <TouchableOpacity
+            style={styles.urlBtn}
+            onPress={() => {
+              if (urlInput.trim()) {
+                handleQuickAction('open_url', urlInput.trim());
+                setUrlInput('');
+              }
+            }}
+          >
+            <Text style={styles.urlBtnText}>Aç ↗</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.quickLaunchRow}>
+          {[
+            { label: '▶️ YouTube', act: 'open_url', val: 'https://youtube.com' },
+            { label: '🐙 GitHub', act: 'open_url', val: 'https://github.com' },
+            { label: '🧮 Hesap Mak.', act: 'launch_app', val: 'calc.exe' },
+            { label: '📝 Not Defteri', act: 'launch_app', val: 'notepad.exe' },
+          ].map((item) => (
             <TouchableOpacity
-              key={m.label}
-              style={[
-                styles.moodButton,
-                selectedMood === m.emoji && styles.moodButtonActive,
-              ]}
-              onPress={() => setSelectedMood(m.emoji)}
+              key={item.label}
+              style={styles.launchChip}
+              onPress={() => handleQuickAction(item.act, item.val)}
             >
-              <Text style={styles.moodEmoji}>{m.emoji}</Text>
-              <Text style={[
-                styles.moodLabel,
-                selectedMood === m.emoji && styles.moodLabelActive,
-              ]}>
-                {m.label}
-              </Text>
+              <Text style={styles.launchChipText}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {/* HIZLI ALIŞKANLIKLAR LİSTESİ */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Günün Alışkanlıkları</Text>
-          <TouchableOpacity onPress={() => onNavigate('habits')}>
-            <Text style={styles.linkText}>Tümünü Gör →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {habits.slice(0, 3).map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.habitRow, item.completedToday && styles.habitRowCompleted]}
-            onPress={() => handleToggleHabit(item.id)}
-          >
-            <View style={[styles.checkbox, item.completedToday && styles.checkboxChecked]}>
-              {item.completedToday && <Text style={styles.checkIcon}>✓</Text>}
-            </View>
-            <View style={styles.habitTextWrap}>
-              <Text style={[styles.habitTitle, item.completedToday && styles.habitTitleDone]}>
-                {item.title}
-              </Text>
-              <Text style={styles.habitMeta}>
-                🔥 {item.streak} Gün Serisi • {item.category}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* AI KOÇ ÖNERİSİ KARTI */}
-      <TouchableOpacity
-        style={styles.aiBanner}
-        onPress={() => onNavigate('chat')}
-      >
+      {/* ANTIGRAVITY AI KOMUTAN KISAYOLU */}
+      <TouchableOpacity style={styles.aiBanner} onPress={() => onNavigate('chat')}>
         <View style={styles.aiBannerIconWrap}>
           <Text style={styles.aiBannerIcon}>🤖</Text>
         </View>
         <View style={styles.aiBannerTextWrap}>
-          <Text style={styles.aiBannerTitle}>Aura AI Asistanına Danış</Text>
+          <Text style={styles.aiBannerTitle}>Antigravity & AI Komutanına Yaz</Text>
           <Text style={styles.aiBannerSubtitle}>
-            Bugünkü planlarını netleştirmek ve motivasyon almak için dokun.
+            Doğal dille laptopta komut çalıştır veya Antigravity'ye görev gönder.
           </Text>
         </View>
         <Text style={styles.aiBannerArrow}>→</Text>
       </TouchableOpacity>
 
-      <View style={{ height: 40 }} />
+      <View style={{ height: 30 }} />
     </ScrollView>
   );
 }
@@ -215,12 +295,88 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 24,
   },
-  cardHighlight: {
+  updateBanner: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  updateTitle: {
+    color: colors.success,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  updateSub: {
+    color: colors.text,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  toastBox: {
+    backgroundColor: colors.primary,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  toastText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    marginHorizontal: 4,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  metricValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+    marginTop: 4,
+  },
+  metricSub: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  miniBarBg: {
+    height: 5,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 3,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  miniBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  sectionCard: {
     backgroundColor: colors.surface,
     marginHorizontal: 20,
-    marginTop: 10,
+    marginTop: 16,
     borderRadius: 20,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
@@ -228,143 +384,129 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  cardSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  percentBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  percentText: {
-    color: '#FFF',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  progressBarBg: {
-    height: 8,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.success,
-    borderRadius: 4,
-  },
-  section: {
-    marginTop: 26,
-    paddingHorizontal: 20,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
+  cardTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 12,
   },
-  linkText: {
-    color: colors.primaryLight,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  moodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  moodButton: {
-    backgroundColor: colors.surface,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    minWidth: 60,
-  },
-  moodButtonActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.surfaceLight,
-  },
-  moodEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  moodLabel: {
+  cardSubtitle: {
     fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  moodLabelActive: {
-    color: colors.primaryLight,
-  },
-  habitRow: {
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-  },
-  habitRowCompleted: {
-    opacity: 0.7,
-  },
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: colors.textMuted,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  checkboxChecked: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-  },
-  checkIcon: {
-    color: '#FFF',
-    fontWeight: '900',
-    fontSize: 14,
-  },
-  habitTextWrap: {
-    flex: 1,
-  },
-  habitTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  habitTitleDone: {
-    textDecorationLine: 'line-through',
-    color: colors.textMuted,
-  },
-  habitMeta: {
-    fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
   },
+  captureBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  captureBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  screenshotImg: {
+    width: '100%',
+    height: 190,
+    borderRadius: 12,
+    backgroundColor: '#000',
+  },
+  emptyMonitor: {
+    height: 150,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyMonitorIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  emptyMonitorText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  deckBtn: {
+    flex: 1,
+    backgroundColor: colors.surfaceLight,
+    marginHorizontal: 4,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  deckIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  deckLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  urlRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+  },
+  urlInput: {
+    flex: 1,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  urlBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  urlBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  quickLaunchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  launchChip: {
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginRight: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  launchChipText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   aiBanner: {
     marginHorizontal: 20,
-    marginTop: 24,
+    marginTop: 16,
     backgroundColor: colors.surfaceLight,
     borderRadius: 20,
     padding: 18,

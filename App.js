@@ -12,16 +12,14 @@ import { colors } from './src/theme/colors';
 
 // Ekranlar
 import HomeScreen from './src/screens/HomeScreen';
-import HabitsScreen from './src/screens/HabitsScreen';
 import ChatScreen from './src/screens/ChatScreen';
-import JournalScreen from './src/screens/JournalScreen';
+import TerminalScreen from './src/screens/TerminalScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const TABS = [
-  { id: 'home', label: 'Ana Sayfa', icon: '🏠' },
-  { id: 'habits', label: 'Alışkanlık', icon: '🎯' },
-  { id: 'chat', label: 'Aura AI', icon: '🤖' },
-  { id: 'journal', label: 'Günlük', icon: '📖' },
+  { id: 'home', label: 'Sistem', icon: '🖥️' },
+  { id: 'chat', label: 'Komutan', icon: '🤖' },
+  { id: 'terminal', label: 'Terminal', icon: '💻' },
   { id: 'settings', label: 'Ayarlar', icon: '⚙️' },
 ];
 
@@ -32,12 +30,10 @@ export default function App() {
     switch (activeTab) {
       case 'home':
         return <HomeScreen onNavigate={setActiveTab} />;
-      case 'habits':
-        return <HabitsScreen />;
       case 'chat':
         return <ChatScreen />;
-      case 'journal':
-        return <JournalScreen />;
+      case 'terminal':
+        return <TerminalScreen />;
       case 'settings':
         return <SettingsScreen />;
       default:
@@ -49,12 +45,10 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
-      {/* AKTİF EKRAN */}
       <View style={styles.screenContainer}>
         {renderScreen()}
       </View>
 
-      {/* ALT GEZİNME ÇUBUĞU (BOTTOM NAVIGATION BAR) */}
       <View style={styles.navBar}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -103,9 +97,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
     borderRadius: 14,
-    minWidth: 58,
+    minWidth: 68,
   },
   navTabActive: {
     backgroundColor: colors.surfaceLight,
@@ -119,7 +113,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   navLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textMuted,
     fontWeight: '600',
   },

@@ -12,15 +12,17 @@ import {
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { storageService } from '../services/storageService';
+import { bridgeService } from '../services/bridgeService';
 import { APP_CONFIG } from '../config';
 
-const CURRENT_VERSION = '1.1.0';
+const CURRENT_VERSION = '2.0.0';
 const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Aura-AI.apk';
 const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-uygulama/main/remote-config.json';
 
 export default function SettingsScreen() {
   const [geminiKey, setGeminiKey] = useState('');
-  const [userName, setUserName] = useState('');
+  const [customBridgeUrl, setCustomBridgeUrl] = useState('');
+  const [activeBridgeUrl, setActiveBridgeUrl] = useState('');
   const [savedStatus, setSavedStatus] = useState('');
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -34,53 +36,40 @@ export default function SettingsScreen() {
   const loadSettings = async () => {
     const s = await storageService.getSettings();
     setGeminiKey(s.geminiApiKey || '');
-    setUserName(s.userName || 'Dostum');
+    setCustomBridgeUrl(s.customBridgeUrl || '');
+    const discovered = await bridgeService.discoverBridgeUrl(true);
+    setActiveBridgeUrl(discovered || '');
   };
 
   const handleSave = async () => {
     await storageService.saveSettings({
       geminiApiKey: geminiKey.trim(),
-      userName: userName.trim() || 'Dostum',
+      customBridgeUrl: customBridgeUrl.trim(),
+      userName: 'Omar',
       isDarkMode: true,
     });
+    const discovered = await bridgeService.discoverBridgeUrl(true);
+    setActiveBridgeUrl(discovered || '');
     setSavedStatus('✅ Ayarlar başarıyla kaydedildi!');
     setTimeout(() => setSavedStatus(''), 3000);
   };
 
-  const handleTestKey = async () => {
-    const keyToTest = geminiKey.trim() || APP_CONFIG?.GEMINI_API_KEY || '';
-    if (!keyToTest) {
-      setTestResult({ success: false, msg: 'Test edilecek bir API anahtarı bulunamadı.' });
-      return;
-    }
-
+  const handleTestBridge = async () => {
     setTestingKey(true);
     setTestResult(null);
-
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${keyToTest}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: 'Selam!' }] }]
-        })
+    const status = await bridgeService.getStatus();
+    if (status && status.ok) {
+      setTestResult({
+        success: true,
+        msg: `🟢 Laptop Bağlantısı Başarılı! (${status.hostname} • RAM: ${status.ramUsedGB}/${status.ramTotalGB} GB)`
       });
-
-      if (response.ok) {
-        setTestResult({ success: true, msg: '🎉 Harika! Aura AI bulut bağlantısı aktif ve sorunsuz çalışıyor.' });
-      } else {
-        const err = await response.json().catch(() => ({}));
-        setTestResult({
-          success: false,
-          msg: `❌ Bağlantı başarısız (${response.status}): ${err.error?.message || 'Geçersiz anahtar.'}`
-        });
-      }
-    } catch (e) {
-      setTestResult({ success: false, msg: `❌ Ağ hatası: ${e.message}` });
-    } finally {
-      setTestingKey(false);
+    } else {
+      setTestResult({
+        success: false,
+        msg: `❌ Laptop köprüsüne ulaşılamadı: ${status?.error || 'Bağlantı hatası'}`
+      });
     }
+    setTestingKey(false);
   };
 
   const handleCheckUpdate = async () => {
@@ -93,12 +82,12 @@ export default function SettingsScreen() {
         if (remote.version && remote.version !== CURRENT_VERSION) {
           setUpdateInfo({
             hasUpdate: true,
-            msg: `🚀 Yeni sürüm (v${remote.version}) mevcut! Eski uygulamayı silmeden doğrudan üzerine kurabilirsiniz.`
+            msg: `🚀 Yeni sürüm (v${remote.version}) mevcut! Aşağıdaki "Son APK'yı İndir" butonuna dokunarak eskiyi silmeden üzerine kurabilirsiniz.`
           });
         } else {
           setUpdateInfo({
             hasUpdate: false,
-            msg: `✅ Uygulamanız güncel (v${CURRENT_VERSION}). Yine de son APK'yı indirmek isterseniz aşağıdaki butonu kullanabilirsiniz.`
+            msg: `✅ Uygulamanız güncel (v${CURRENT_VERSION}). Yine de son APK'yı indirmek için yan butonu kullanabilirsiniz.`
           });
         }
       }
@@ -114,90 +103,13 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <Header subtitle="Yapılandırma" title="Ayarlar ⚙️" />
-
-      {/* KULLANICI PROFİLİ */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Profil Bilgileri</Text>
-        <Text style={styles.label}>Görünen İsim:</Text>
-        <TextInput
-          style={styles.input}
-          value={userName}
-          onChangeText={setUserName}
-          placeholder="İsminizi yazın..."
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-
-      {/* API ANAHTARI ENTEGRASYONU (GİZLİ KORUMALI) */}
-      <View style={styles.card}>
-        <View style={styles.badgeRow}>
-          <Text style={styles.cardTitle}>Yapay Zeka Bağlantısı</Text>
-          <View style={styles.secureBadge}>
-            <Text style={styles.secureBadgeText}>🔒 Gizli Anahtar Aktif</Text>
-          </View>
-        </View>
-        <Text style={styles.description}>
-          Uygulama içinde gömülü ve şifreli Aura AI bağlantısı varsayılan olarak aktiftir. Yalnızca kendi özel anahtarınızı kullanmak isterseniz aşağıya girebilirsiniz:
-        </Text>
-
-        <Text style={styles.label}>Özel API Anahtarı (Opsiyonel):</Text>
-        <TextInput
-          style={styles.input}
-          value={geminiKey}
-          onChangeText={setGeminiKey}
-          placeholder="•••••••• (Varsayılan korumalı anahtar kullanılıyor)"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry={true}
-          autoCapitalize="none"
-        />
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.testBtn}
-            onPress={handleTestKey}
-            disabled={testingKey}
-          >
-            {testingKey ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Text style={styles.testBtnText}>⚡ Bağlantıyı Test Et</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>Kaydet</Text>
-          </TouchableOpacity>
-        </View>
-
-        {testResult && (
-          <View
-            style={[
-              styles.testResultBox,
-              testResult.success ? styles.testSuccess : styles.testError,
-            ]}
-          >
-            <Text
-              style={[
-                styles.testResultText,
-                testResult.success ? styles.testSuccessText : styles.testErrorText,
-              ]}
-            >
-              {testResult.msg}
-            </Text>
-          </View>
-        )}
-
-        {savedStatus !== '' && (
-          <Text style={styles.savedNotice}>{savedStatus}</Text>
-        )}
-      </View>
+      <Header subtitle="Sistem & Güncelleme" title="Ayarlar ⚙️" />
 
       {/* UYGULAMA GÜNCELLEME MERKEZİ */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Uygulama Güncelleme Merkezi 🔄</Text>
         <Text style={styles.description}>
-          Uygulamaya yeni özellikler eklendiğinde eski uygulamayı silmenize gerek yoktur; yeni APK'yı indirip açtığınızda verileriniz silinmeden doğrudan güncellenir.
+          Yeni özellikler eklendiğinde eski uygulamayı silmenize gerek yoktur; yeni APK'yı indirip açtığınızda doğrudan üzerine güncellenir.
         </Text>
 
         <View style={styles.actionRow}>
@@ -230,20 +142,94 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {/* LAPTOP KÖPRÜ BAĞLANTISI */}
+      <View style={styles.card}>
+        <View style={styles.badgeRow}>
+          <Text style={styles.cardTitle}>Laptop Köprü Bağlantısı 💻</Text>
+          <View style={styles.secureBadge}>
+            <Text style={styles.secureBadgeText}>⚡ Otomatik Keşif</Text>
+          </View>
+        </View>
+        <Text style={styles.description}>
+          Aktif Köprü Adresi: {activeBridgeUrl || 'Otomatik aranıyor...'}
+        </Text>
+
+        <Text style={styles.label}>Özel Köprü URL (Boş bırakılırsa GitHub'dan otomatik bulur):</Text>
+        <TextInput
+          style={styles.input}
+          value={customBridgeUrl}
+          onChangeText={setCustomBridgeUrl}
+          placeholder="Otomatik (https://....lhr.life)"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+        />
+
+        <Text style={styles.label}>Özel Gemini API Anahtarı (Gömülü anahtar korumalıdır):</Text>
+        <TextInput
+          style={styles.input}
+          value={geminiKey}
+          onChangeText={setGeminiKey}
+          placeholder="•••••••• (Varsayılan korumalı anahtar aktif)"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry={true}
+          autoCapitalize="none"
+        />
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.testBtn}
+            onPress={handleTestBridge}
+            disabled={testingKey}
+          >
+            {testingKey ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Text style={styles.testBtnText}>🔌 Laptopu Test Et</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            <Text style={styles.saveBtnText}>Kaydet</Text>
+          </TouchableOpacity>
+        </View>
+
+        {testResult && (
+          <View
+            style={[
+              styles.testResultBox,
+              testResult.success ? styles.testSuccess : styles.testError,
+            ]}
+          >
+            <Text
+              style={[
+                styles.testResultText,
+                testResult.success ? styles.testSuccessText : styles.testErrorText,
+              ]}
+            >
+              {testResult.msg}
+            </Text>
+          </View>
+        )}
+
+        {savedStatus !== '' && (
+          <Text style={styles.savedNotice}>{savedStatus}</Text>
+        )}
+      </View>
+
       {/* UYGULAMA HAKKINDA */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Uygulama Bilgisi</Text>
+        <Text style={styles.cardTitle}>Sistem Bilgisi</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Uygulama:</Text>
-          <Text style={styles.infoValue}>Aura Life Companion</Text>
+          <Text style={styles.infoValue}>Nexus PC & Antigravity Remote</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Versiyon:</Text>
           <Text style={styles.infoValue}>v{CURRENT_VERSION}</Text>
         </View>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>AI Motoru:</Text>
-          <Text style={styles.infoValue}>Gemini 3.8 Flash (Korumalı)</Text>
+          <Text style={styles.infoLabel}>Hedef Bilgisayar:</Text>
+          <Text style={styles.infoValue}>DESKTOP-3EQ1SQ5</Text>
         </View>
       </View>
     </ScrollView>
