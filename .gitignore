@@ -26,4 +26,6 @@ Thumbs.db
 *.exe
 pc-bridge/cloudflared.exe
 pc-bridge/bridge*.log
+index.android.bundle
+ota-assets/
 
