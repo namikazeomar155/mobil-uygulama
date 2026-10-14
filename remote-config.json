@@ -1,11 +1,11 @@
 {
   "lanUrl": "http://192.168.178.59:4040",
   "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "bridgeUrl": "https://leasing-wrist-surely-athletes.trycloudflare.com",
   "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
-  "announcement": "⚡ Namikaze AI v3.2: Gelişmiş Function Calling AI motoru (kod söylemeyi bırakıp doğrudan çalıştırma), Sesli konuşma (TTS), Windows bildirimleri ve Pano kontrolü!",
-  "updatedAt": "2026-10-14T16:54:46.358Z",
-  "backupTunnelUrl": "https://af68fb94abb89f.lhr.life",
-  "bundleVersion": "3.2.0"
+  "announcement": "⚡ Namikaze AI v3.3: 503 API Hatası Düzeltildi! Anında Çevrimdışı PC Komut Motoru (0.05sn tepki) + Çoklu Model Otomatik Hata Kurtarma (Failover Cascade) + Header Logo Düzeltmesi!",
+  "updatedAt": "2026-10-14T17:09:45.447Z",
+  "backupTunnelUrl": "https://eebcce92554d4d.lhr.life",
+  "bundleVersion": "3.3.0"
 }
