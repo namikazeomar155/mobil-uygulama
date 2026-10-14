@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { colors } from '../theme/colors';
+import { LOGO_ICON_BASE64 } from '../theme/logoData';
 
 export default function Header({ title, subtitle, rightElement }) {
   return (
@@ -8,7 +9,7 @@ export default function Header({ title, subtitle, rightElement }) {
       <View style={styles.leftRow}>
         <View style={styles.logoWrap}>
           <Image
-            source={require('../../assets/logo-icon.png')}
+            source={{ uri: LOGO_ICON_BASE64 }}
             style={styles.logoImg}
             resizeMode="contain"
           />

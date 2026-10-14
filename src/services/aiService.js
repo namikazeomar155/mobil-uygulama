@@ -2,7 +2,14 @@ import { storageService } from './storageService';
 import { bridgeService } from './bridgeService';
 import { APP_CONFIG } from '../config';
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
+// Otomatik hata kurtarmalı, yedekli model listesi (503/429/network hatasında sıradakine geçer)
+const CANDIDATE_MODELS = [
+  'gemini-flash-lite-latest', // En hızlı, 200 OK yanıt veren, sıfır gecikmeli model
+  'gemini-3.5-flash-lite',    // Kararlı yedek model
+  'gemini-3.8-flash',         // Yüksek kapasiteli model
+  'gemini-3.7-flash',         // Alternatif model
+  'gemini-flash-latest',      // Stabil genel flash
+];
 
 const LAPTOP_TOOLS = [
   {
@@ -23,7 +30,7 @@ const LAPTOP_TOOLS = [
       },
       {
         name: 'system_control',
-        description: 'Laptop donanım ve sistem kontrollerini gerçekleştirir (ses aç/kıs/sessiz, medya oynat/durdur/sonraki/önceki, PC kilitle, uyku modu, çöp kutusu temizleme).',
+        description: 'Laptop donanım ve sistem kontrollerini gerçekleştirir (ses aç/kıs/sessiz, medya oynat/durdur/sonraki/önceki, PC kilitle, uyku modu, çöp kutusu temizleme, bilgisayarı kapat, yeniden başlat).',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -40,6 +47,8 @@ const LAPTOP_TOOLS = [
                 'lock_pc',
                 'sleep_pc',
                 'empty_recycle_bin',
+                'shutdown_pc',
+                'restart_pc',
               ],
             },
           },
@@ -122,6 +131,25 @@ const LAPTOP_TOOLS = [
         },
       },
       {
+        name: 'get_system_status',
+        description: 'Laptop donanım durumunu (Pil/Şarj yüzdesi, CPU yükü, RAM kullanımı, uptime) detaylı olarak getirir.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {},
+        },
+      },
+      {
+        name: 'kill_process',
+        description: 'Laptopta donan veya istenmeyen bir programı/işlemi PID numarasına göre zorla kapatır.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            processId: { type: 'STRING', description: 'Kapatılacak işlemin ID (PID) numarası' },
+          },
+          required: ['processId'],
+        },
+      },
+      {
         name: 'delegate_antigravity',
         description: 'Büyük kodlama, yazılım geliştirme veya derin proje görevlerini laptoptaki Antigravity AI ajanına kuyruk görevi olarak devreder.',
         parameters: {
@@ -139,16 +167,206 @@ const LAPTOP_TOOLS = [
 const SYSTEM_INSTRUCTION = `Sen kullanıcının Windows 10/11 laptopuna (DESKTOP-3EQ1SQ5) doğrudan ve kesintisiz bağlı olan "Namikaze AI" adında kişisel yapay zeka komutanısın.
 
 KRİTİK ÇALIŞMA KURALLARI:
-1. KULLANICIYA KESİNLİKLE "Şu kodu terminalde çalıştırın", "PowerShell'e şunu yazabilirsiniz" GİBİ CEVAPLAR VERME! Kullanıcı kodu kendisi çalıştırmak için değil, senin laptopta doğrudan uygulaman için burada.
-2. Bilgisayarda bir işlem yapılması (dosya bulma, ses açma, site açma, sistem bilgisi öğrenme, ekran görüntüsü, konuşma, uygulama açma) istendiğinde KESİNLİKLE ilgili fonksiyonu (tool) çağır.
+1. KULLANICIYA KESİNLİKLE "Şu kodu terminalde çalıştırın", "PowerShell'e şunu yazabilirsiniz" GİBİ CEVAPLAR VERME! Kullanıcı kodu kendisi çalıştırmak için değil, senin laptopta DOĞRUDAN ÇALIŞTIRMAN için burada.
+2. Bilgisayarda bir işlem yapılması (dosya bulma, ses açma, site açma, sistem bilgisi öğrenme, ekran görüntüsü, konuşma, uygulama açma, PC kapatma, kilitleme) istendiğinde KESİNLİKLE ilgili fonksiyonu (tool) çağır.
 3. Bir fonksiyon çağırdığında laptop onu anında çalıştıracaktır.
 4. Sadece genel sohbet, bilgi veya tavsiye istendiğinde samimi, havalı ve yardımsever bir dille Türkçe yanıt ver.`;
 
 export const aiService = {
   /**
-   * Gemini 3.8 Flash + Native Function Calling + Resilient Fallback Auto-Exec
+   * 0. AŞAMA: Anında / Çevrimdışı Doğrudan Komut Eşleştirici (0.05sn Tepki, Sıfır Hata)
+   * Standart PC komutlarını Google API'ye gitmeden anında laptoptaki köprüye iletir.
+   */
+  async matchDirectCommand(rawInput) {
+    if (!rawInput) return null;
+    const text = rawInput.trim().toLowerCase();
+
+    // 1. Bilgisayarı kapat / Kapat
+    if (
+      /^(bilgisayar[ıi]|laptop[u]?|pc)?\s*(kapat|kapatılsın|turn off|shutdown|power off)$/i.test(text) ||
+      text === 'kapat' || text === 'bilgisayarı kapat' || text === 'kapat laptopu' || text === 'laptopu kapat'
+    ) {
+      const res = await bridgeService.sendAction('shutdown_pc');
+      return `🔌 **Laptop Kapatılıyor!**\nSistem 15 saniye içinde güvenli bir şekilde kapatılacaktır.\n_${res.output || 'Komut laptoba başarıyla iletildi.'}_`;
+    }
+
+    // 2. Yeniden başlat
+    if (
+      /^(bilgisayar[ıi]|laptop[u]?|pc)?\s*(yeniden başlat|restart|reboot)$/i.test(text) ||
+      text === 'yeniden başlat' || text === 'restart'
+    ) {
+      const res = await bridgeService.sendAction('restart_pc');
+      return `🔄 **Laptop Yeniden Başlatılıyor!**\nSistem 15 saniye içinde yeniden başlatılacaktır.\n_${res.output || 'Komut laptoba başarıyla iletildi.'}_`;
+    }
+
+    // 3. Ekranı Kilitle
+    if (
+      /(ekran[ıi]?\s*kilitle|kilitle|bilgisayar[ıi]?\s*kilitle|lock\s*screen|lock\s*pc|kilit)/i.test(text)
+    ) {
+      const res = await bridgeService.sendAction('lock_pc');
+      return `🔒 **Laptop Ekranı Kilitlendi!**\nOturum güvenli bir şekilde kilitlendi.`;
+    }
+
+    // 4. Uyku Modu
+    if (/(uyku\s*modu|uyut|uyu|sleep\s*mode|sleep\s*pc)/i.test(text)) {
+      const res = await bridgeService.sendAction('sleep_pc');
+      return `💤 **Laptop Uyku Moduna Alındı.**`;
+    }
+
+    // 5. Ses Aç / Yükselt
+    if (/(ses[i]?\s*(aç|yükselt|artır)|volume\s*up)/i.test(text)) {
+      const res = await bridgeService.sendAction('volume_up');
+      return `🔊 **Laptop Sesi Yükseltildi (+10%).**`;
+    }
+
+    // 6. Ses Kıs / Azalt
+    if (/(ses[i]?\s*(kıs|azalt|alçalt)|volume\s*down)/i.test(text)) {
+      const res = await bridgeService.sendAction('volume_down');
+      return `🔉 **Laptop Sesi Kısıldı (-10%).**`;
+    }
+
+    // 7. Sessiz / Mute
+    if (/(sessiz|mute|ses[i]?\s*(kapat|sustur))/i.test(text)) {
+      const res = await bridgeService.sendAction('volume_mute');
+      return `🔇 **Laptop Sessize Alındı / Açıldı.**`;
+    }
+
+    // 8. Medya Oynat / Durdur
+    if (/(oynat|duraklat|durdur|şarkı(yı)?\s*durdur|şarkı(yı)?\s*başlat|play|pause)/i.test(text)) {
+      const res = await bridgeService.sendAction('media_play_pause');
+      return `⏯️ **Medya Oynatıldı / Duraklatıldı.**`;
+    }
+
+    // 9. Sonraki Şarkı
+    if (/(sonraki\s*(şarkı|müzik|parça)|next\s*track)/i.test(text)) {
+      const res = await bridgeService.sendAction('media_next');
+      return `⏭️ **Sonraki Parçaya Geçildi.**`;
+    }
+
+    // 10. Önceki Şarkı
+    if (/(önceki\s*(şarkı|müzik|parça)|prev\s*track)/i.test(text)) {
+      const res = await bridgeService.sendAction('media_prev');
+      return `⏮️ **Önceki Parçaya Geçildi.**`;
+    }
+
+    // 11. Geri Dönüşüm Kutusu / Çöp Temizle
+    if (/(çöp[ü]?\s*(boşalt|temizle)|geri dönüşüm(ü)?\s*boşalt|empty recycle)/i.test(text)) {
+      const res = await bridgeService.sendAction('empty_recycle_bin');
+      return `🗑️ **Geri Dönüşüm Kutusu Temizlendi.**`;
+    }
+
+    // 12. Ekran Görüntüsü
+    if (/(ekran\s*(görüntüsü|resmi)|screenshot|ss\s*al)/i.test(text)) {
+      const res = await bridgeService.getScreenshot();
+      if (res && res.ok && res.image) {
+        return `📸 **Laptop Ekran Görüntüsü Alındı!** (${res.timestamp})\nEkran görüntüsü Ana Ekrandaki monitöre aktarıldı.`;
+      }
+      return `⚠️ Ekran görüntüsü alınamadı: ${res?.error || 'Laptop köprüsü yanıt vermedi.'}`;
+    }
+
+    // 13. YouTube Aç
+    if (/(youtube\s*aç|youtube'?a\s*git|open\s*youtube)/i.test(text)) {
+      const res = await bridgeService.sendAction('open_url', 'https://www.youtube.com');
+      return `🌐 **YouTube Laptopta Açıldı.**`;
+    }
+
+    // 14. Google Aç
+    if (/(google\s*aç|google'?a\s*git|open\s*google)/i.test(text)) {
+      const res = await bridgeService.sendAction('open_url', 'https://www.google.com');
+      return `🌐 **Google Laptopta Açıldı.**`;
+    }
+
+    // 15. Not Defteri Aç
+    if (/(not\s*defteri(ni)?\s*aç|notepad)/i.test(text)) {
+      const res = await bridgeService.sendAction('launch_app', 'notepad');
+      return `📝 **Not Defteri Laptopta Başlatıldı.**`;
+    }
+
+    // 16. Hesap Makinesi Aç
+    if (/(hesap\s*makinesi(ni)?\s*aç|calc|calculator)/i.test(text)) {
+      const res = await bridgeService.sendAction('launch_app', 'calc');
+      return `🧮 **Hesap Makinesi Laptopta Başlatıldı.**`;
+    }
+
+    // 17. Laptop Durumu / Pil / Şarj / CPU
+    if (/(laptop\s*durumu|pc\s*durumu|şarj(ı)?\s*kaç|batarya|pil\s*durumu|sistem\s*durumu)/i.test(text)) {
+      const status = await bridgeService.getStatus();
+      if (status && status.ok) {
+        return `💻 **Laptop Durum Raporu (${status.hostname}):**\n` +
+               `• ⚡ **Şarj:** %${status.batteryPercent} (${status.isCharging ? 'Şarjda 🔌' : 'Pilde 🔋'})\n` +
+               `• 🔥 **CPU:** %${status.cpuPercent}\n` +
+               `• 🧠 **RAM:** ${status.ramUsedGB} GB / ${status.ramTotalGB} GB (%${status.ramPercent})\n` +
+               `• ⏱️ **Çalışma Süresi:** ${status.uptimeHours} saat\n` +
+               `• 🌐 **Bağlantı:** Aktif (${status.timestamp})`;
+      }
+    }
+
+    return null; // Doğrudan standart komut değil -> Gemini AI'ya aktar
+  },
+
+  /**
+   * Çoklu Model Otomatik Hata Kurtarma (Failover Cascade)
+   */
+  async callGeminiWithFailover(payload, apiKey) {
+    let lastError = null;
+
+    for (const model of CANDIDATE_MODELS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 9000);
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          return { ok: true, data, modelUsed: model };
+        }
+
+        const errData = await response.json().catch(() => ({}));
+        const status = response.status;
+        const msg = errData?.error?.message || `HTTP ${status}`;
+        lastError = `[${model}] (${status}): ${msg}`;
+
+        // 503 (Yüksek Talep / Server Unavailable) veya 429 veya 500 hatasında hemen sıradaki modele geç!
+        if ([404, 429, 500, 502, 503, 504].includes(status)) {
+          continue;
+        }
+
+        return { ok: false, error: `⚠️ API Hatası (${status}): ${msg}` };
+      } catch (netErr) {
+        lastError = `[${model}] Ağ hatası: ${netErr.message}`;
+        continue;
+      }
+    }
+
+    return {
+      ok: false,
+      error: `⚠️ Google AI modelleri yoğunluk yaşıyor. Lütfen birazdan tekrar deneyin.\n_${lastError || 'Tüm modeller denendi.'}_`,
+    };
+  },
+
+  /**
+   * Ana Mesaj Gönderme ve Yapay Zeka Yürütme Döngüsü
    */
   async sendMessage(userMessage, conversationHistory = []) {
+    // 1. Önce Hızlı Çevrimdışı / Doğrudan Komutları Yakala
+    try {
+      const directResult = await this.matchDirectCommand(userMessage);
+      if (directResult) {
+        return directResult;
+      }
+    } catch (e) {
+      console.warn('Direct command error:', e.message);
+    }
+
+    // 2. API Anahtarını Doğrula
     const settings = await storageService.getSettings();
     let apiKey = settings.geminiApiKey;
 
@@ -166,34 +384,32 @@ export const aiService = {
         .slice(-8)
         .map(msg => ({
           role: msg.sender === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.text }]
+          parts: [{ text: msg.text }],
         }));
 
       contents.push({
         role: 'user',
-        parts: [{ text: `${SYSTEM_INSTRUCTION}\n\nKullanıcı komutu: ${userMessage}` }]
+        parts: [{ text: `${SYSTEM_INSTRUCTION}\n\nKullanıcı komutu: ${userMessage}` }],
       });
 
-      // 1. AŞAMA: Gemini API'ye Tools ile Birlikte İstek Gönder
-      const response = await fetch(`${GEMINI_API_URL}?key=${apiKey.trim()}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // 3. Çoklu Model Failover ile Gemini API Çağrısı
+      const geminiResult = await this.callGeminiWithFailover(
+        {
           contents,
           tools: LAPTOP_TOOLS,
           generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 800,
           },
-        }),
-      });
+        },
+        apiKey
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        return `⚠️ API Hatası (${response.status}): ${errorData?.error?.message || 'Bağlantı kontrol edilmeli.'}`;
+      if (!geminiResult.ok) {
+        return geminiResult.error;
       }
 
-      const data = await response.json();
+      const data = geminiResult.data;
       const candidate = data.candidates?.[0];
       const parts = candidate?.content?.parts || [];
 
@@ -286,6 +502,24 @@ export const aiService = {
           return `⚠️ Ekran görüntüsü alınamadı: ${res?.error || 'Bağlantı hatası'}`;
         }
 
+        case 'get_system_status': {
+          const status = await bridgeService.getStatus();
+          if (status && status.ok) {
+            return `💻 **Laptop Durum Raporu (${status.hostname}):**\n` +
+                   `• ⚡ **Şarj:** %${status.batteryPercent} (${status.isCharging ? 'Şarjda 🔌' : 'Pilde 🔋'})\n` +
+                   `• 🔥 **CPU:** %${status.cpuPercent}\n` +
+                   `• 🧠 **RAM:** ${status.ramUsedGB} GB / ${status.ramTotalGB} GB (%${status.ramPercent})\n` +
+                   `• ⏱️ **Çalışma Süresi:** ${status.uptimeHours} saat\n` +
+                   `• 🌐 **Bağlantı:** Aktif (${status.timestamp})`;
+          }
+          return `⚠️ Sistem durumu alınamadı.`;
+        }
+
+        case 'kill_process': {
+          const res = await bridgeService.sendAction('kill_process', args.processId);
+          return res.output || res.error || `🛑 İşlem (${args.processId}) kapatıldı.`;
+        }
+
         case 'delegate_antigravity': {
           const res = await bridgeService.sendAction('antigravity_task', args.taskPrompt);
           return res.output || `🚀 Görev Antigravity kuyruğuna iletildi: "${args.taskPrompt}"`;
@@ -315,7 +549,6 @@ export const aiService = {
     const codeBlock = text.match(/```(?:powershell|ps1|cmd|batch)?\s*([\s\S]*?)```/i);
     if (codeBlock && codeBlock[1]) {
       const candidate = codeBlock[1].trim();
-      // Eğer kod bloğu gerçekten bir komut içeriyorsa
       if (candidate.length > 2 && !candidate.startsWith('//') && !candidate.startsWith('#!/bin/bash')) {
         return candidate;
       }

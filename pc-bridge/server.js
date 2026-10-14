@@ -318,6 +318,12 @@ const server = http.createServer(async (req, res) => {
         case 'empty_recycle_bin':
           ps = `Clear-RecycleBin -Force -ErrorAction SilentlyContinue; "🗑️ Geri Dönüşüm Kutusu temizlendi"`;
           break;
+        case 'shutdown_pc':
+          ps = `shutdown /s /t 15 /c "Namikaze AI tarafından kapatılıyor..."; "🔌 Laptop 15 saniye içinde kapatılacak"`;
+          break;
+        case 'restart_pc':
+          ps = `shutdown /r /t 15 /c "Namikaze AI tarafından yeniden başlatılıyor..."; "🔄 Laptop 15 saniye içinde yeniden başlatılacak"`;
+          break;
         case 'speak_text':
           if (target) {
             const escaped = target.replace(/"/g, '`"');
