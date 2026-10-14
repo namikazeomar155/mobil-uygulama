@@ -306,8 +306,43 @@ const server = http.createServer(async (req, res) => {
         case 'media_next':
           ps = `$obj = New-Object -ComObject WScript.Shell; $obj.SendKeys([char]176); "⏭️ Sonraki parçaya geçildi"`;
           break;
+        case 'media_prev':
+          ps = `$obj = New-Object -ComObject WScript.Shell; $obj.SendKeys([char]177); "⏮️ Önceki parçaya geçildi"`;
+          break;
         case 'lock_pc':
           ps = `rundll32.exe user32.dll,LockWorkStation; "🔒 Laptop ekranı kilitlendi"`;
+          break;
+        case 'sleep_pc':
+          ps = `rundll32.exe powrprof.dll,SetSuspendState 0,1,0; "💤 Laptop uyku moduna alındı"`;
+          break;
+        case 'empty_recycle_bin':
+          ps = `Clear-RecycleBin -Force -ErrorAction SilentlyContinue; "🗑️ Geri Dönüşüm Kutusu temizlendi"`;
+          break;
+        case 'speak_text':
+          if (target) {
+            const escaped = target.replace(/"/g, '`"');
+            ps = `$s = New-Object -ComObject SAPI.SpVoice; $s.Speak("${escaped}"); "🗣️ Laptopta seslendirildi: \"${escaped}\""`;
+          }
+          break;
+        case 'show_notification':
+          if (target) {
+            const escaped = target.replace(/"/g, '`"');
+            ps = `$ws = New-Object -ComObject WScript.Shell; $ws.Popup("${escaped}", 5, "Namikaze AI Bildirimi", 64); "🔔 Bildirim laptop ekranında gösterildi"`;
+          }
+          break;
+        case 'get_clipboard':
+          ps = `Get-Clipboard | Out-String;`;
+          break;
+        case 'set_clipboard':
+          if (target) {
+            const escaped = target.replace(/"/g, '`"');
+            ps = `Set-Clipboard -Value "${escaped}"; "📋 Metin laptop panosuna kopyalandı"`;
+          }
+          break;
+        case 'search_files':
+          if (target) {
+            ps = `Get-ChildItem -Path "$HOME\\Desktop", "$HOME\\Downloads", "$HOME\\Documents" -Filter "*${target}*" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 15 FullName, Length | Format-Table -AutoSize | Out-String`;
+          }
           break;
         case 'open_url':
           if (target) {
@@ -369,7 +404,7 @@ const server = http.createServer(async (req, res) => {
 
 // Dual-stack (IPv4 + IPv6) dinleme ile hem 127.0.0.1 hem ::1 hem de yerel Wi-Fi (192.168.x.x) isteklerini kabul et
 server.listen(PORT, () => {
-  console.log(`⚡ Namikaze AI PC Bridge Server aktif: http://127.0.0.1:${PORT} & http://${getLocalLanIp()}:${PORT}`);
+  logMsg(`⚡ Namikaze AI PC Bridge Server aktif: http://127.0.0.1:${PORT} & http://${getLocalLanIp()}:${PORT}`);
   startCloudflareTunnel();
   startBackupSshTunnel();
 });

@@ -15,7 +15,7 @@ import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { bridgeService } from '../services/bridgeService';
 
-const CURRENT_VERSION = '3.1.0';
+const CURRENT_VERSION = '3.2.0';
 const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
 
 export default function HomeScreen({ onNavigate }) {
@@ -233,6 +233,23 @@ export default function HomeScreen({ onNavigate }) {
           >
             <Text style={styles.deckIcon}>🔒</Text>
             <Text style={[styles.deckLabel, { color: '#F87171' }]}>PC Kilitle</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.gridRow, { marginTop: 10 }]}>
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('speak_text', 'Selam Omar, Namikaze AI emrinde!')}>
+            <Text style={styles.deckIcon}>🗣️</Text>
+            <Text style={styles.deckLabel}>Konuş</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('show_notification', 'Namikaze AI telefonundan bağlandı!')}>
+            <Text style={styles.deckIcon}>🔔</Text>
+            <Text style={styles.deckLabel}>Bildirim Gönder</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('empty_recycle_bin')}>
+            <Text style={styles.deckIcon}>🗑️</Text>
+            <Text style={styles.deckLabel}>Çöp Boşalt</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -16,7 +16,7 @@ import { bridgeService } from '../services/bridgeService';
 import { updateService } from '../services/updateService';
 import { APP_CONFIG } from '../config';
 
-const CURRENT_VERSION = '3.1.0';
+const CURRENT_VERSION = '3.2.0';
 const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
 
 export default function SettingsScreen() {

@@ -16,10 +16,14 @@ import { aiService } from '../services/aiService';
 import { storageService } from '../services/storageService';
 
 const SUGGESTIONS = [
+  'Laptopta sesli "Selam Omar" de 🗣️',
   'Masaüstündeki dosyaları listele 📂',
-  'En çok RAM harcayan 5 programı göster 📊',
+  'Laptop ekranında bildirim göster 🔔',
+  'Panomda ne kopyalı göster 📋',
   'Laptopta YouTube aç ▶️',
-  'Sistem ve ekran kartı bilgilerini getir 💻',
+  'Geri Dönüşüm Kutusunu temizle 🗑️',
+  'En çok RAM harcayan programları göster 📊',
+  'Laptop ekranını kilitle 🔒',
 ];
 
 export default function ChatScreen() {
