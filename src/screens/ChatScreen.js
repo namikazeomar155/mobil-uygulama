@@ -10,20 +10,22 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { aiService } from '../services/aiService';
 import { storageService } from '../services/storageService';
 
 const SUGGESTIONS = [
-  'Laptopta sesli "Selam Omar" de 🗣️',
-  'Masaüstündeki dosyaları listele 📂',
-  'Laptop ekranında bildirim göster 🔔',
-  'Panomda ne kopyalı göster 📋',
-  'Laptopta YouTube aç ▶️',
-  'Geri Dönüşüm Kutusunu temizle 🗑️',
-  'En çok RAM harcayan programları göster 📊',
-  'Laptop ekranını kilitle 🔒',
+  { label: 'Laptopta sesli "Selam Omar" de', icon: 'megaphone-outline' },
+  { label: 'Masaüstündeki dosyaları listele', icon: 'folder-outline' },
+  { label: 'Laptop ekranında bildirim göster', icon: 'notifications-outline' },
+  { label: 'Panomda ne kopyalı göster', icon: 'clipboard-outline' },
+  { label: 'Laptopta YouTube aç', icon: 'logo-youtube' },
+  { label: 'Geri Dönüşüm Kutusunu temizle', icon: 'trash-outline' },
+  { label: 'En çok RAM harcayan programlar', icon: 'speedometer-outline' },
+  { label: 'Laptop ekranını kilitle', icon: 'lock-closed-outline' },
 ];
 
 export default function ChatScreen() {
@@ -44,6 +46,10 @@ export default function ChatScreen() {
   const handleSend = async (textToSend) => {
     const message = textToSend || inputText;
     if (!message || message.trim() === '' || loading) return;
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
 
     const userMsg = {
       id: Date.now().toString(),
@@ -76,11 +82,14 @@ export default function ChatScreen() {
   };
 
   const handleClear = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
     const initial = [
       {
         id: Date.now().toString(),
         sender: 'ai',
-        text: 'Sohbet temizlendi! Yeni bir konuyla başlayalım, bugün aklında ne var?',
+        text: 'Sohbet temizlendi! Yeni bir görev veya soruyla başlayabilirsiniz.',
         timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
       }
     ];
@@ -95,16 +104,17 @@ export default function ChatScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <Header
-        subtitle="Antigravity & PC Köprüsü"
-        title="Namikaze AI 🤖"
+        subtitle="Antigravity & PC Asistanı"
+        title="AI Komutan"
         rightElement={
           <TouchableOpacity onPress={handleClear} style={styles.clearBtn}>
+            <Ionicons name="trash-bin-outline" size={14} color={colors.textSecondary} style={{ marginRight: 4 }} />
             <Text style={styles.clearBtnText}>Temizle</Text>
           </TouchableOpacity>
         }
       />
 
-      {/* MESAJ LİSTESİ */}
+      {/* CHAT MESSAGES */}
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -115,11 +125,18 @@ export default function ChatScreen() {
           const isUser = item.sender === 'user';
           return (
             <View style={[styles.bubbleWrap, isUser ? styles.bubbleWrapUser : styles.bubbleWrapAi]}>
+              {!isUser && (
+                <View style={styles.aiAvatar}>
+                  <Ionicons name="sparkles" size={14} color={colors.primaryLight} />
+                </View>
+              )}
               <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAi]}>
                 <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAi]}>
                   {item.text}
                 </Text>
-                <Text style={styles.timestamp}>{item.timestamp}</Text>
+                <Text style={[styles.timestamp, isUser ? styles.timestampUser : styles.timestampAi]}>
+                  {item.timestamp}
+                </Text>
               </View>
             </View>
           );
@@ -134,7 +151,7 @@ export default function ChatScreen() {
         }
       />
 
-      {/* HIZLI ÖNERİ BALONCUKLARI */}
+      {/* QUICK SUGGESTIONS */}
       <View style={styles.suggestionsContainer}>
         <FlatList
           horizontal
@@ -145,19 +162,21 @@ export default function ChatScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.chip}
-              onPress={() => handleSend(item)}
+              onPress={() => handleSend(item.label)}
+              activeOpacity={0.7}
             >
-              <Text style={styles.chipText}>{item}</Text>
+              <Ionicons name={item.icon} size={14} color={colors.primaryLight} style={{ marginRight: 6 }} />
+              <Text style={styles.chipText}>{item.label}</Text>
             </TouchableOpacity>
           )}
         />
       </View>
 
-      {/* METİN GİRİŞ ALANI */}
+      {/* INPUT BAR */}
       <View style={styles.inputBar}>
         <TextInput
           style={styles.input}
-          placeholder="Namikaze AI'ya komut ver..."
+          placeholder="Komut ver veya bir soru sor..."
           placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
@@ -167,8 +186,9 @@ export default function ChatScreen() {
           style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
           onPress={() => handleSend()}
           disabled={!inputText.trim() || loading}
+          activeOpacity={0.8}
         >
-          <Text style={styles.sendIcon}>➤</Text>
+          <Ionicons name="send" size={18} color="#FFF" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -181,7 +201,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   clearBtn: {
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: colors.surface,
@@ -200,12 +222,25 @@ const styles = StyleSheet.create({
   bubbleWrap: {
     marginBottom: 12,
     flexDirection: 'row',
+    alignItems: 'flex-end',
   },
   bubbleWrapUser: {
     justifyContent: 'flex-end',
   },
   bubbleWrapAi: {
     justifyContent: 'flex-start',
+  },
+  aiAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
   },
   bubble: {
     maxWidth: '82%',
@@ -223,8 +258,8 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceBorder,
   },
   bubbleText: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20,
   },
   bubbleTextUser: {
     color: '#FFF',
@@ -234,18 +269,24 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.5)',
     marginTop: 6,
+  },
+  timestampUser: {
+    color: 'rgba(255, 255, 255, 0.6)',
     alignSelf: 'flex-end',
+  },
+  timestampAi: {
+    color: colors.textMuted,
+    alignSelf: 'flex-start',
   },
   loadingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     alignSelf: 'flex-start',
-    marginLeft: 4,
+    marginLeft: 36,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
@@ -260,12 +301,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 14,
+    borderRadius: 12,
     marginRight: 8,
   },
   chipText: {
@@ -277,7 +320,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderColor: colors.surfaceBorder,
@@ -286,29 +329,26 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: colors.inputBackground,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     color: colors.text,
     fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
   },
   sendButtonDisabled: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceElevated,
     opacity: 0.5,
-  },
-  sendIcon: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '900',
   },
 });

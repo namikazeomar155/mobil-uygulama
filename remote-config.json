@@ -1,11 +1,11 @@
 {
   "lanUrl": "http://192.168.178.59:4040",
   "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
-  "version": "3.3.1",
+  "version": "3.4.0",
   "bridgeUrl": "https://leasing-wrist-surely-athletes.trycloudflare.com",
   "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
-  "announcement": "⚡ Namikaze AI v3.3.1: API anahtarı varsayılan olarak entegre edildi, artık manuel giriş gerektirmez!",
-  "updatedAt": "2026-10-14T20:05:42.870Z",
+  "announcement": "✨ Namikaze AI v3.4.0: Yepyeni net, profesyonel ve akıcı arayüz tasarımı, Ionicons ve canlı renkler!",
+  "updatedAt": "2026-10-14T20:08:00.000Z",
   "backupTunnelUrl": "https://6f2191046c3455.lhr.life",
-  "bundleVersion": "3.3.1"
+  "bundleVersion": "3.4.0"
 }

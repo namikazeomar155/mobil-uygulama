@@ -8,15 +8,17 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { bridgeService } from '../services/bridgeService';
 
 const QUICK_COMMANDS = [
-  { label: '📂 Masaüstü', cmd: 'Get-ChildItem "$HOME\\Desktop" | Select-Object Name, Length | Format-Table -AutoSize' },
-  { label: '🌐 IP & Ağ', cmd: 'Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceAlias, IPAddress' },
-  { label: '💾 Disk Durumu', cmd: 'Get-PSDrive C | Select-Object @{N="UsedGB";E={[math]::Round($_.Used/1GB,1)}}, @{N="FreeGB";E={[math]::Round($_.Free/1GB,1)}}' },
-  { label: '🔋 Pil Raporu', cmd: 'Get-CimInstance Win32_Battery | Select-Object Name, EstimatedChargeRemaining' },
+  { label: 'Masaüstü', icon: 'folder-outline', cmd: 'Get-ChildItem "$HOME\\Desktop" | Select-Object Name, Length | Format-Table -AutoSize' },
+  { label: 'IP & Ağ', icon: 'wifi-outline', cmd: 'Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceAlias, IPAddress' },
+  { label: 'Disk', icon: 'disc-outline', cmd: 'Get-PSDrive C | Select-Object @{N="UsedGB";E={[math]::Round($_.Used/1GB,1)}}, @{N="FreeGB";E={[math]::Round($_.Free/1GB,1)}}' },
+  { label: 'Pil', icon: 'battery-charging-outline', cmd: 'Get-CimInstance Win32_Battery | Select-Object Name, EstimatedChargeRemaining' },
 ];
 
 export default function TerminalScreen() {
@@ -43,6 +45,10 @@ export default function TerminalScreen() {
     const finalCmd = cmdToRun || command;
     if (!finalCmd || !finalCmd.trim()) return;
 
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+
     setRunning(true);
     const res = await bridgeService.execPowerShell(finalCmd.trim());
     const resultText = res.output || res.error || '(Komut tamamlandı, çıktı yok)';
@@ -52,6 +58,9 @@ export default function TerminalScreen() {
   };
 
   const handleKillProcess = async (pid, name) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
     const res = await bridgeService.sendAction('kill_process', pid);
     setOutput(`PS C:\\Users\\omar> Stop-Process -Id ${pid} (${name})\n${res.output || res.error}`);
     loadProcesses();
@@ -60,26 +69,35 @@ export default function TerminalScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <Header
-        subtitle="Uzaktan Komut & İşlemler"
-        title="Terminal & Görevler 💻"
+        subtitle="PowerShell & Görev Yöneticisi"
+        title="Terminal & Süreçler"
         rightElement={
           <TouchableOpacity style={styles.refreshBtn} onPress={loadProcesses}>
-            <Text style={styles.refreshBtnText}>🔄 Yenile</Text>
+            <Ionicons name="refresh-outline" size={14} color={colors.primaryLight} style={{ marginRight: 4 }} />
+            <Text style={styles.refreshBtnText}>Yenile</Text>
           </TouchableOpacity>
         }
       />
 
-      {/* POWERSHELL KONSOLU */}
+      {/* POWERSHELL CONSOLE CARD */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>⚡ Canlı PowerShell Konsolu</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Canlı PowerShell Konsolu</Text>
+          <View style={styles.badgeShell}>
+            <Text style={styles.badgeShellText}>PS 7.x / 5.1</Text>
+          </View>
+        </View>
 
+        {/* QUICK COMMAND CHIPS */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
           {QUICK_COMMANDS.map((q) => (
             <TouchableOpacity
               key={q.label}
               style={styles.chip}
               onPress={() => handleRunCommand(q.cmd)}
+              activeOpacity={0.7}
             >
+              <Ionicons name={q.icon} size={14} color={colors.primaryLight} style={{ marginRight: 6 }} />
               <Text style={styles.chipText}>{q.label}</Text>
             </TouchableOpacity>
           ))}
@@ -88,7 +106,7 @@ export default function TerminalScreen() {
         <View style={styles.inputRow}>
           <TextInput
             style={styles.cmdInput}
-            placeholder="PowerShell komutu yaz..."
+            placeholder="PowerShell komutu girin..."
             placeholderTextColor={colors.textMuted}
             value={command}
             onChangeText={setCommand}
@@ -98,11 +116,15 @@ export default function TerminalScreen() {
             style={styles.runBtn}
             onPress={() => handleRunCommand()}
             disabled={running}
+            activeOpacity={0.8}
           >
             {running ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={styles.runBtnText}>Çalıştır ▶</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="play" size={14} color="#FFF" style={{ marginRight: 4 }} />
+                <Text style={styles.runBtnText}>Çalıştır</Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
@@ -112,10 +134,13 @@ export default function TerminalScreen() {
         </View>
       </View>
 
-      {/* AÇIK UYGULAMALAR (GÖREV YÖNETİCİSİ) */}
+      {/* ACTIVE PROCESSES (TASK MANAGER) */}
       <View style={styles.card}>
         <View style={styles.procHeader}>
-          <Text style={styles.cardTitle}>📊 Açık Uygulamalar ({processes.length})</Text>
+          <View>
+            <Text style={styles.cardTitle}>Açık Uygulamalar</Text>
+            <Text style={styles.cardSubtitle}>{processes.length} aktif süreç izleniyor</Text>
+          </View>
           {loadingProcs && <ActivityIndicator size="small" color={colors.primaryLight} />}
         </View>
 
@@ -136,8 +161,10 @@ export default function TerminalScreen() {
             <TouchableOpacity
               style={styles.killBtn}
               onPress={() => handleKillProcess(proc.Id, proc.ProcessName)}
+              activeOpacity={0.7}
             >
-              <Text style={styles.killBtnText}>🛑 Kapat</Text>
+              <Ionicons name="close-circle-outline" size={14} color={colors.danger} style={{ marginRight: 3 }} />
+              <Text style={styles.killBtnText}>Kapat</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -155,10 +182,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
@@ -169,25 +198,50 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.surface,
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginTop: 14,
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 10,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  badgeShell: {
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  badgeShellText: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
   },
   chipRow: {
     flexDirection: 'row',
     marginBottom: 12,
   },
   chip: {
-    backgroundColor: colors.surfaceLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
@@ -206,10 +260,10 @@ const styles = StyleSheet.create({
   },
   cmdInput: {
     flex: 1,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    backgroundColor: colors.inputBackground,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     color: colors.text,
     fontSize: 13,
     fontFamily: 'monospace',
@@ -219,7 +273,7 @@ const styles = StyleSheet.create({
   runBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: 10,
     marginLeft: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -230,9 +284,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   consoleBox: {
-    backgroundColor: '#050811',
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: '#040711',
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#1E293B',
     minHeight: 110,
@@ -247,7 +301,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   procRow: {
     flexDirection: 'row',
@@ -263,13 +317,13 @@ const styles = StyleSheet.create({
   },
   procName: {
     color: colors.text,
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 14,
   },
   procId: {
     color: colors.textMuted,
+    fontSize: 11,
     fontWeight: '400',
-    fontSize: 12,
   },
   procWindow: {
     color: colors.textSecondary,
@@ -277,21 +331,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   procMem: {
-    color: colors.primaryLight,
+    color: colors.accent,
     fontSize: 11,
-    fontWeight: '600',
     marginTop: 2,
+    fontWeight: '600',
   },
   killBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.dangerSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.danger,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
   },
   killBtnText: {
-    color: '#F87171',
+    color: colors.dangerLight,
     fontSize: 11,
     fontWeight: '700',
   },

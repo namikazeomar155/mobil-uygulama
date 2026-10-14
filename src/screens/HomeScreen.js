@@ -9,14 +9,14 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { bridgeService } from '../services/bridgeService';
 
-const CURRENT_VERSION = '3.2.0';
-const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
+const CURRENT_VERSION = '3.4.0';
 
 export default function HomeScreen({ onNavigate }) {
   const [status, setStatus] = useState(null);
@@ -54,11 +54,17 @@ export default function HomeScreen({ onNavigate }) {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
     await loadTelemetry(true);
     setRefreshing(false);
   };
 
   const handleCaptureScreen = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
     setLoadingShot(true);
     const res = await bridgeService.getScreenshot();
     if (res && res.ok && res.image) {
@@ -70,12 +76,15 @@ export default function HomeScreen({ onNavigate }) {
   };
 
   const handleQuickAction = async (action, target = '') => {
-    showToast('⚡ Komut gönderiliyor...');
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+    showToast('⚡ Komut iletiliyor...');
     const res = await bridgeService.sendAction(action, target);
     if (res && res.ok) {
       showToast(res.output || '✅ Komut uygulandı');
     } else {
-      showToast(`❌ Hata: ${res?.error || 'Bağlantı yok'}`);
+      showToast(`❌ Hata: ${res?.error || 'Laptop bağlantısı yok'}`);
     }
   };
 
@@ -90,79 +99,138 @@ export default function HomeScreen({ onNavigate }) {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primaryLight} />}
     >
       <Header
-        subtitle={status ? `🟢 ${status.hostname} • BAĞLI (${status.uptimeHours}s)` : '🔴 LAPTOP BAĞLANTISI ARANIYOR...'}
+        subtitle={status ? `🟢 ${status.hostname} • BAĞLI` : '🔴 BAĞLANTI BEKLENİYOR'}
         title="Namikaze AI"
         rightElement={
           <TouchableOpacity
-            style={styles.captureBtn}
+            style={[styles.statusPillBtn, status ? styles.statusPillConnected : styles.statusPillDisconnected]}
             onPress={() => {
-              showToast('🔄 Laptop köprüsü yenileniyor...');
+              showToast('🔄 Laptop bağlantısı kontrol ediliyor...');
               loadTelemetry(true);
             }}
           >
-            <Text style={styles.captureBtnText}>{status ? '🟢 Bağlı' : '🔄 Bağlan'}</Text>
+            <Ionicons
+              name={status ? 'checkmark-circle' : 'refresh-circle'}
+              size={16}
+              color={status ? colors.success : colors.danger}
+            />
+            <Text style={[styles.statusPillText, { color: status ? colors.success : colors.danger }]}>
+              {status ? 'Bağlı' : 'Yenile'}
+            </Text>
           </TouchableOpacity>
         }
       />
 
-      {/* OTOMATİK GÜNCELLEME BİLDİRİMİ */}
+      {/* UPDATE BANNER */}
       {hasNewUpdate && (
         <TouchableOpacity
           style={styles.updateBanner}
           onPress={() => onNavigate('settings')}
+          activeOpacity={0.8}
         >
-          <Text style={styles.updateTitle}>🚀 Yeni Sürüm Hazır (v{remoteConfig.version})!</Text>
-          <Text style={styles.updateSub}>
-            Uygulama içinden tek dokunuşla sessizce güncellemek için buraya dokunun.
-          </Text>
+          <View style={styles.updateIconWrap}>
+            <Ionicons name="sparkles" size={20} color={colors.success} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.updateTitle}>Yeni Sürüm Hazır (v{remoteConfig.version})</Text>
+            <Text style={styles.updateSub}>Ayarlardan tek dokunuşla güncelleyin.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.success} />
         </TouchableOpacity>
       )}
 
-      {/* DURUM BİLDİRİM TOAST */}
+      {/* TOAST NOTIFICATION */}
       {actionToast !== '' && (
         <View style={styles.toastBox}>
           <Text style={styles.toastText}>{actionToast}</Text>
         </View>
       )}
 
-      {/* CANLI DONANIM GÖSTERGELERİ (CPU / RAM / BATARYA) */}
+      {/* LAPTOP CONNECTION CARD */}
+      <View style={styles.connectionCard}>
+        <View style={styles.connectionRow}>
+          <View style={styles.connectionIconWrap}>
+            <Ionicons
+              name={status ? 'laptop-outline' : 'alert-circle-outline'}
+              size={24}
+              color={status ? colors.success : colors.warning}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.connectionTitle}>
+              {status ? status.hostname : 'Laptop Bağlantısı Aranıyor'}
+            </Text>
+            <Text style={styles.connectionSub}>
+              {status
+                ? `Açık kalma: ${status.uptimeHours} saat • ${status.platform || 'Windows'}`
+                : 'Bilgisayarınızın ve köprünün çalıştığından emin olun'}
+            </Text>
+          </View>
+          <View style={[styles.pingBadge, status ? styles.pingBadgeGreen : styles.pingBadgeRed]}>
+            <Text style={[styles.pingText, { color: status ? colors.success : colors.danger }]}>
+              {status ? 'CANLI' : 'KOPUK'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* LIVE METRICS (CPU / RAM / BATTERY) */}
       <View style={styles.metricsRow}>
+        {/* CPU */}
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>İŞLEMCİ (CPU)</Text>
+          <View style={styles.metricHeader}>
+            <Text style={styles.metricLabel}>CPU</Text>
+            <Ionicons name="hardware-chip-outline" size={16} color={colors.primaryLight} />
+          </View>
           <Text style={styles.metricValue}>{status ? `%${status.cpuPercent}` : '--'}</Text>
           <View style={styles.miniBarBg}>
-            <View style={[styles.miniBarFill, { width: `${status?.cpuPercent || 0}%`, backgroundColor: colors.primary }]} />
+            <View style={[styles.miniBarFill, { width: `${status?.cpuPercent || 0}%`, backgroundColor: colors.primaryLight }]} />
           </View>
         </View>
 
+        {/* RAM */}
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>BELLEK (RAM)</Text>
+          <View style={styles.metricHeader}>
+            <Text style={styles.metricLabel}>RAM</Text>
+            <Ionicons name="speedometer-outline" size={16} color={colors.accent} />
+          </View>
           <Text style={styles.metricValue}>{status ? `%${status.ramPercent}` : '--'}</Text>
-          <Text style={styles.metricSub}>{status ? `${status.ramUsedGB}/${status.ramTotalGB} GB` : ''}</Text>
           <View style={styles.miniBarBg}>
             <View style={[styles.miniBarFill, { width: `${status?.ramPercent || 0}%`, backgroundColor: colors.accent }]} />
           </View>
+          <Text style={styles.metricSub}>{status ? `${status.ramUsedGB}/${status.ramTotalGB} GB` : ''}</Text>
         </View>
 
+        {/* BATTERY */}
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>GÜÇ / PİL</Text>
+          <View style={styles.metricHeader}>
+            <Text style={styles.metricLabel}>PİL</Text>
+            <Ionicons
+              name={status?.isCharging ? 'battery-charging-outline' : 'battery-full-outline'}
+              size={16}
+              color={colors.success}
+            />
+          </View>
           <Text style={[styles.metricValue, { color: colors.success }]}>
             {status ? `%${status.batteryPercent}` : '--'}
           </Text>
+          <View style={styles.miniBarBg}>
+            <View style={[styles.miniBarFill, { width: `${status?.batteryPercent || 0}%`, backgroundColor: colors.success }]} />
+          </View>
           <Text style={styles.metricSub}>{status?.isCharging ? '⚡ Şarjda' : '🔋 Pilde'}</Text>
         </View>
       </View>
 
-      {/* CANLI LAPTOP EKRAN GÖRÜNTÜSÜ (LIVE MONITOR) */}
+      {/* SCREEN MONITOR */}
       <View style={styles.sectionCard}>
         <View style={styles.cardHeaderRow}>
           <View>
-            <Text style={styles.cardTitle}>🖥️ Canlı Laptop Ekranı</Text>
+            <Text style={styles.cardTitle}>Canlı Laptop Ekranı</Text>
             <Text style={styles.cardSubtitle}>
-              {screenshot ? `Son çekim: ${screenshot.time}` : 'Anlık masaüstü görüntüsü'}
+              {screenshot ? `Son çekim: ${screenshot.time}` : 'Anlık masaüstü önizlemesi'}
             </Text>
           </View>
           <TouchableOpacity
@@ -173,7 +241,10 @@ export default function HomeScreen({ onNavigate }) {
             {loadingShot ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={styles.captureBtnText}>📸 Ekranı Çek</Text>
+              <>
+                <Ionicons name="camera-outline" size={15} color="#FFF" style={{ marginRight: 4 }} />
+                <Text style={styles.captureBtnText}>Ekranı Çek</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -188,79 +259,83 @@ export default function HomeScreen({ onNavigate }) {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.emptyMonitor} onPress={handleCaptureScreen}>
-            <Text style={styles.emptyMonitorIcon}>💻</Text>
+            <Ionicons name="desktop-outline" size={36} color={colors.textMuted} style={{ marginBottom: 8 }} />
             <Text style={styles.emptyMonitorText}>
-              Laptop ekranını telefonunda görmek için dokun
+              Ekran görüntüsü almak için dokunun
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* HIZLI MEDYA & SES KUMANDASI */}
+      {/* MEDIA & SYSTEM CONTROLS */}
       <View style={styles.sectionCard}>
-        <Text style={styles.cardTitle}>🎛️ Hızlı Medya & Sistem Kumandası</Text>
+        <Text style={styles.cardTitle}>Hızlı Sistem Kontrolleri</Text>
+        <Text style={styles.cardSubtitle}>Ses, medya ve masaüstü kısayolları</Text>
+
         <View style={styles.gridRow}>
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('volume_down')}>
-            <Text style={styles.deckIcon}>🔉</Text>
+            <Ionicons name="volume-low-outline" size={22} color={colors.text} />
             <Text style={styles.deckLabel}>Ses Kıs</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('volume_mute')}>
-            <Text style={styles.deckIcon}>🔇</Text>
+            <Ionicons name="volume-mute-outline" size={22} color={colors.text} />
             <Text style={styles.deckLabel}>Sessiz</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('volume_up')}>
-            <Text style={styles.deckIcon}>🔊</Text>
+            <Ionicons name="volume-high-outline" size={22} color={colors.text} />
             <Text style={styles.deckLabel}>Ses Aç</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.gridRow, { marginTop: 10 }]}>
+        <View style={[styles.gridRow, { marginTop: 8 }]}>
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('media_play_pause')}>
-            <Text style={styles.deckIcon}>⏯️</Text>
-            <Text style={styles.deckLabel}>Oynat/Durdur</Text>
+            <Ionicons name="play-skip-back-circle-outline" size={22} color={colors.primaryLight} />
+            <Text style={styles.deckLabel}>Oynat/Dur</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('media_next')}>
-            <Text style={styles.deckIcon}>⏭️</Text>
+            <Ionicons name="play-skip-forward-circle-outline" size={22} color={colors.primaryLight} />
             <Text style={styles.deckLabel}>Sonraki</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.deckBtn, { borderColor: colors.danger }]}
+            style={[styles.deckBtn, styles.deckBtnDanger]}
             onPress={() => handleQuickAction('lock_pc')}
           >
-            <Text style={styles.deckIcon}>🔒</Text>
-            <Text style={[styles.deckLabel, { color: '#F87171' }]}>PC Kilitle</Text>
+            <Ionicons name="lock-closed-outline" size={22} color={colors.danger} />
+            <Text style={[styles.deckLabel, { color: colors.dangerLight }]}>PC Kilitle</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.gridRow, { marginTop: 10 }]}>
+        <View style={[styles.gridRow, { marginTop: 8 }]}>
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('speak_text', 'Selam Omar, Namikaze AI emrinde!')}>
-            <Text style={styles.deckIcon}>🗣️</Text>
-            <Text style={styles.deckLabel}>Konuş</Text>
+            <Ionicons name="megaphone-outline" size={22} color={colors.accent} />
+            <Text style={styles.deckLabel}>Sesli Selam</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('show_notification', 'Namikaze AI telefonundan bağlandı!')}>
-            <Text style={styles.deckIcon}>🔔</Text>
+            <Ionicons name="notifications-outline" size={22} color={colors.cyan} />
             <Text style={styles.deckLabel}>Bildirim Gönder</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.deckBtn} onPress={() => handleQuickAction('empty_recycle_bin')}>
-            <Text style={styles.deckIcon}>🗑️</Text>
+            <Ionicons name="trash-outline" size={22} color={colors.textSecondary} />
             <Text style={styles.deckLabel}>Çöp Boşalt</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* LAPTOPTA SİTE VEYA UYGULAMA BAŞLAT */}
+      {/* QUICK LAUNCH & WEB */}
       <View style={styles.sectionCard}>
-        <Text style={styles.cardTitle}>🚀 Laptopta Hızlı Başlat</Text>
+        <Text style={styles.cardTitle}>Laptopta Hızlı Başlat</Text>
+        <Text style={styles.cardSubtitle}>Web adresi veya uygulama açın</Text>
+
         <View style={styles.urlRow}>
           <TextInput
             style={styles.urlInput}
-            placeholder="Web adresi yaz (örn: youtube.com)..."
+            placeholder="Web sitesi (örn: youtube.com)..."
             placeholderTextColor={colors.textMuted}
             value={urlInput}
             onChangeText={setUrlInput}
@@ -281,37 +356,42 @@ export default function HomeScreen({ onNavigate }) {
 
         <View style={styles.quickLaunchRow}>
           {[
-            { label: '▶️ YouTube', act: 'open_url', val: 'https://youtube.com' },
-            { label: '🐙 GitHub', act: 'open_url', val: 'https://github.com' },
-            { label: '🧮 Hesap Mak.', act: 'launch_app', val: 'calc.exe' },
-            { label: '📝 Not Defteri', act: 'launch_app', val: 'notepad.exe' },
+            { label: 'YouTube', icon: 'logo-youtube', color: '#EF4444', act: 'open_url', val: 'https://youtube.com' },
+            { label: 'GitHub', icon: 'logo-github', color: '#CBD5E1', act: 'open_url', val: 'https://github.com' },
+            { label: 'Hesap Mak.', icon: 'calculator-outline', color: '#38BDF8', act: 'launch_app', val: 'calc.exe' },
+            { label: 'Not Defteri', icon: 'document-text-outline', color: '#FBBF24', act: 'launch_app', val: 'notepad.exe' },
           ].map((item) => (
             <TouchableOpacity
               key={item.label}
               style={styles.launchChip}
               onPress={() => handleQuickAction(item.act, item.val)}
             >
+              <Ionicons name={item.icon} size={15} color={item.color} style={{ marginRight: 6 }} />
               <Text style={styles.launchChipText}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {/* ANTIGRAVITY AI KOMUTAN KISAYOLU */}
-      <TouchableOpacity style={styles.aiBanner} onPress={() => onNavigate('chat')}>
+      {/* AI COMMANDER CARD */}
+      <TouchableOpacity
+        style={styles.aiBanner}
+        onPress={() => onNavigate('chat')}
+        activeOpacity={0.85}
+      >
         <View style={styles.aiBannerIconWrap}>
-          <Text style={styles.aiBannerIcon}>🤖</Text>
+          <Ionicons name="sparkles" size={24} color="#FFF" />
         </View>
         <View style={styles.aiBannerTextWrap}>
-          <Text style={styles.aiBannerTitle}>Antigravity & AI Komutanına Yaz</Text>
+          <Text style={styles.aiBannerTitle}>Antigravity AI Komutanı</Text>
           <Text style={styles.aiBannerSubtitle}>
-            Doğal dille laptopta komut çalıştır veya Antigravity'ye görev gönder.
+            Doğal dille komut verin veya PC görevlerini otomatize edin.
           </Text>
         </View>
-        <Text style={styles.aiBannerArrow}>→</Text>
+        <Ionicons name="arrow-forward" size={20} color={colors.primaryLight} />
       </TouchableOpacity>
 
-      <View style={{ height: 30 }} />
+      <View style={{ height: 24 }} />
     </ScrollView>
   );
 }
@@ -325,27 +405,32 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   updateBanner: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    marginHorizontal: 20,
+    backgroundColor: colors.successSoft,
+    marginHorizontal: 16,
     marginBottom: 12,
-    padding: 16,
+    padding: 14,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.success,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  updateIconWrap: {
+    marginRight: 10,
   },
   updateTitle: {
     color: colors.success,
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 14,
   },
   updateSub: {
-    color: colors.text,
+    color: colors.textSecondary,
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
   toastBox: {
     backgroundColor: colors.primary,
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 10,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -357,55 +442,128 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  metricsRow: {
+  statusPillBtn: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    marginTop: 6,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  metricCard: {
-    flex: 1,
+  statusPillConnected: {
+    backgroundColor: colors.successSoft,
+    borderColor: colors.success,
+  },
+  statusPillDisconnected: {
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.danger,
+  },
+  statusPillText: {
+    fontWeight: '700',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  connectionCard: {
     backgroundColor: colors.surface,
-    marginHorizontal: 4,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 12,
     padding: 14,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
-  metricLabel: {
+  connectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  connectionIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  connectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  connectionSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  pingBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  pingBadgeGreen: {
+    backgroundColor: colors.successSoft,
+  },
+  pingBadgeRed: {
+    backgroundColor: colors.dangerSoft,
+  },
+  pingText: {
     fontSize: 10,
+    fontWeight: '800',
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    marginHorizontal: 3,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 11,
     fontWeight: '700',
     color: colors.textSecondary,
-    letterSpacing: 0.5,
   },
   metricValue: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
-    marginTop: 4,
+    marginTop: 6,
   },
   metricSub: {
     fontSize: 10,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: 4,
   },
   miniBarBg: {
-    height: 5,
+    height: 4,
     backgroundColor: colors.surfaceLight,
-    borderRadius: 3,
+    borderRadius: 2,
     marginTop: 8,
     overflow: 'hidden',
   },
   miniBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 2,
   },
   sectionCard: {
     backgroundColor: colors.surface,
-    marginHorizontal: 20,
-    marginTop: 16,
-    borderRadius: 20,
-    padding: 18,
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
@@ -421,15 +579,17 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   cardSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
   },
   captureBtn: {
+    flexDirection: 'row',
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 10,
+    alignItems: 'center',
   },
   captureBtnText: {
     color: '#FFF',
@@ -443,18 +603,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   emptyMonitor: {
-    height: 150,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceLight,
+    height: 140,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  emptyMonitorIcon: {
-    fontSize: 32,
-    marginBottom: 8,
   },
   emptyMonitorText: {
     color: colors.textSecondary,
@@ -464,26 +620,27 @@ const styles = StyleSheet.create({
   gridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 10,
   },
   deckBtn: {
     flex: 1,
-    backgroundColor: colors.surfaceLight,
-    marginHorizontal: 4,
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: colors.surfaceElevated,
+    marginHorizontal: 3,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
-  deckIcon: {
-    fontSize: 22,
-    marginBottom: 4,
+  deckBtnDanger: {
+    borderColor: colors.dangerSoft,
+    backgroundColor: colors.dangerSoft,
   },
   deckLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.text,
+    marginTop: 4,
   },
   urlRow: {
     flexDirection: 'row',
@@ -491,10 +648,10 @@ const styles = StyleSheet.create({
   },
   urlInput: {
     flex: 1,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    backgroundColor: colors.inputBackground,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     color: colors.text,
     fontSize: 13,
     borderWidth: 1,
@@ -503,7 +660,7 @@ const styles = StyleSheet.create({
   urlBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 10,
     marginLeft: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -519,7 +676,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   launchChip: {
-    backgroundColor: colors.surfaceLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -534,11 +693,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   aiBanner: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 20,
-    padding: 18,
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -553,9 +712,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 14,
   },
-  aiBannerIcon: {
-    fontSize: 22,
-  },
   aiBannerTextWrap: {
     flex: 1,
   },
@@ -568,10 +724,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  aiBannerArrow: {
-    fontSize: 20,
-    color: colors.primaryLight,
-    marginLeft: 8,
   },
 });

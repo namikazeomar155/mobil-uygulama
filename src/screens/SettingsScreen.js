@@ -7,8 +7,9 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { storageService } from '../services/storageService';
@@ -16,8 +17,7 @@ import { bridgeService } from '../services/bridgeService';
 import { updateService } from '../services/updateService';
 import { APP_CONFIG } from '../config';
 
-const CURRENT_VERSION = '3.3.1';
-const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
+const CURRENT_VERSION = '3.4.0';
 
 export default function SettingsScreen() {
   const [geminiKey, setGeminiKey] = useState('');
@@ -28,6 +28,9 @@ export default function SettingsScreen() {
   const [testResult, setTestResult] = useState(null);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadingType, setDownloadingType] = useState(null); // 'ota' | 'apk' | null
+  const [updateStatusMsg, setUpdateStatusMsg] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -42,6 +45,9 @@ export default function SettingsScreen() {
   };
 
   const handleSave = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
     await storageService.saveSettings({
       geminiApiKey: geminiKey.trim(),
       customBridgeUrl: customBridgeUrl.trim(),
@@ -50,11 +56,14 @@ export default function SettingsScreen() {
     });
     const discovered = await bridgeService.discoverBridgeUrl(true);
     setActiveBridgeUrl(discovered || '');
-    setSavedStatus('✅ Ayarlar başarıyla kaydedildi!');
+    setSavedStatus('Ayarlar başarıyla kaydedildi!');
     setTimeout(() => setSavedStatus(''), 3000);
   };
 
   const handleTestBridge = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
     setTestingKey(true);
     setTestResult(null);
     await bridgeService.discoverBridgeUrl(true);
@@ -64,7 +73,7 @@ export default function SettingsScreen() {
       setActiveBridgeUrl(discovered || '');
       setTestResult({
         success: true,
-        msg: `🟢 Laptop Bağlantısı Başarılı! (${status.hostname} • RAM: ${status.ramUsedGB}/${status.ramTotalGB} GB)`
+        msg: `🟢 Laptop Bağlantısı Başarılı (${status.hostname} • RAM: ${status.ramUsedGB}/${status.ramTotalGB} GB • CPU: %${status.cpuPercent})`
       });
     } else {
       setTestResult({
@@ -75,11 +84,10 @@ export default function SettingsScreen() {
     setTestingKey(false);
   };
 
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadingType, setDownloadingType] = useState(null); // 'ota' | 'apk' | null
-  const [updateStatusMsg, setUpdateStatusMsg] = useState('');
-
   const handleCheckUpdate = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
     setCheckingUpdate(true);
     setUpdateInfo(null);
     setUpdateStatusMsg('');
@@ -99,6 +107,9 @@ export default function SettingsScreen() {
 
   const handleApplyOta = async () => {
     if (!updateInfo?.bundleUrl) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
     setDownloadingType('ota');
     setDownloadProgress(0);
     setUpdateStatusMsg('⚡ Yeni özellik paketi indiriliyor...');
@@ -117,6 +128,9 @@ export default function SettingsScreen() {
 
   const handleInstallApkDirect = async () => {
     if (!updateInfo?.apkUrl) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {}
     setDownloadingType('apk');
     setDownloadProgress(0);
     setUpdateStatusMsg('📥 APK doğrudan indiriliyor...');
@@ -134,35 +148,40 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <Header subtitle="Sistem & Güncelleme" title="Ayarlar ⚙️" />
+      <Header subtitle="Sistem & Yapılandırma" title="Ayarlar" />
 
-      {/* UYGULAMA GÜNCELLEME MERKEZİ */}
+      {/* UPDATE CENTER CARD */}
       <View style={styles.card}>
         <View style={styles.badgeRow}>
-          <Text style={styles.cardTitle}>Uygulama Güncelleme Merkezi 🔄</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="cloud-download-outline" size={20} color={colors.primaryLight} style={{ marginRight: 8 }} />
+            <Text style={styles.cardTitle}>Güncelleme Merkezi</Text>
+          </View>
           <View style={styles.secureBadge}>
             <Text style={styles.secureBadgeText}>v{CURRENT_VERSION}</Text>
           </View>
         </View>
+
         <Text style={styles.description}>
-          Yeni özellikler eklendiğinde tarayıcıya gitmeden veya eski uygulamayı silmeden tek dokunuşla güncelleyebilirsiniz.
+          Yeni özellikler eklendiğinde tarayıcıya gitmeden tek dokunuşla güncelleyin.
         </Text>
 
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.testBtn}
-            onPress={handleCheckUpdate}
-            disabled={checkingUpdate || downloadingType !== null}
-          >
-            {checkingUpdate ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Text style={styles.testBtnText}>🔍 Güncelleme Kontrol Et</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.testBtn}
+          onPress={handleCheckUpdate}
+          disabled={checkingUpdate || downloadingType !== null}
+          activeOpacity={0.8}
+        >
+          {checkingUpdate ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="refresh-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={styles.testBtnText}>Güncellemeleri Kontrol Et</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
-        {/* İNDİRME İLERLEME ÇUBUĞU */}
         {downloadingType !== null && (
           <View style={{ marginTop: 14 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -173,41 +192,38 @@ export default function SettingsScreen() {
                 %{downloadProgress}
               </Text>
             </View>
-            <View style={{ height: 8, backgroundColor: colors.surfaceLight, borderRadius: 4, overflow: 'hidden' }}>
-              <View style={{ width: `${downloadProgress}%`, height: '100%', backgroundColor: colors.primary, borderRadius: 4 }} />
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${downloadProgress}%` }]} />
             </View>
           </View>
         )}
 
-        {/* BİLGİ VE GÜNCELLEME AKSİYONLARI */}
         {updateInfo && (
           <View style={{ marginTop: 14 }}>
             {updateInfo.hasUpdate ? (
               <View style={[styles.testResultBox, styles.testSuccess]}>
-                <Text style={[styles.testResultText, styles.testSuccessText, { fontWeight: '700', marginBottom: 6 }]}>
+                <Text style={[styles.testResultText, styles.testSuccessText, { fontWeight: '700', marginBottom: 4 }]}>
                   🚀 Yeni Sürüm Hazır: v{updateInfo.latestVersion}
                 </Text>
                 <Text style={[styles.testResultText, styles.testSuccessText]}>
-                  {updateInfo.announcement || 'Yeni özellikler ve kararlılık iyileştirmeleri eklendi.'}
+                  {updateInfo.announcement || 'Yeni özellikler ve kararlılık iyileştirmeleri hazır.'}
                 </Text>
 
                 <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
-                  {/* 1. OTA GÜNCELLEME BUTONU */}
                   <TouchableOpacity
                     style={[styles.saveBtn, { flex: 1, backgroundColor: colors.primary }]}
                     onPress={handleApplyOta}
                     disabled={downloadingType !== null}
                   >
-                    <Text style={styles.saveBtnText}>⚡ Hızlı Güncelle (Kurulumsuz)</Text>
+                    <Text style={styles.saveBtnText}>⚡ Hızlı Güncelle</Text>
                   </TouchableOpacity>
 
-                  {/* 2. UYGULAMA İÇİ DOĞRUDAN APK BUTONU */}
                   <TouchableOpacity
-                    style={[styles.testBtn, { flex: 1, borderColor: colors.primary }]}
+                    style={[styles.testBtn, { flex: 1, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.primaryLight }]}
                     onPress={handleInstallApkDirect}
                     disabled={downloadingType !== null}
                   >
-                    <Text style={[styles.testBtnText, { color: colors.primaryLight }]}>📥 APK İle Güncelle</Text>
+                    <Text style={[styles.testBtnText, { color: colors.primaryLight }]}>📥 APK İndir</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -222,7 +238,7 @@ export default function SettingsScreen() {
         )}
 
         {updateStatusMsg !== '' && (
-          <View style={[styles.testResultBox, { backgroundColor: 'rgba(232, 122, 74, 0.15)', borderWidth: 1, borderColor: colors.primary }]}>
+          <View style={styles.statusBox}>
             <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>
               {updateStatusMsg}
             </Text>
@@ -230,34 +246,38 @@ export default function SettingsScreen() {
         )}
       </View>
 
-      {/* LAPTOP KÖPRÜ BAĞLANTISI */}
+      {/* LAPTOP BRIDGE CONNECTION CARD */}
       <View style={styles.card}>
         <View style={styles.badgeRow}>
-          <Text style={styles.cardTitle}>Laptop Köprü Bağlantısı 💻</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="link-outline" size={20} color={colors.accent} style={{ marginRight: 8 }} />
+            <Text style={styles.cardTitle}>Laptop Köprü Bağlantısı</Text>
+          </View>
           <View style={styles.secureBadge}>
-            <Text style={styles.secureBadgeText}>⚡ Otomatik Keşif</Text>
+            <Text style={styles.secureBadgeText}>Otomatik Keşif</Text>
           </View>
         </View>
+
         <Text style={styles.description}>
-          Aktif Köprü Adresi: {activeBridgeUrl || 'Otomatik aranıyor...'}
+          Aktif Adres: {activeBridgeUrl || 'Otomatik aranıyor...'}
         </Text>
 
-        <Text style={styles.label}>Özel Köprü URL (Boş bırakılırsa GitHub'dan otomatik bulur):</Text>
+        <Text style={styles.label}>Özel Köprü URL (Boş bırakılırsa GitHub üzerinden otomatik bağlanır):</Text>
         <TextInput
           style={styles.input}
           value={customBridgeUrl}
           onChangeText={setCustomBridgeUrl}
-          placeholder="Otomatik (Cloudflare / SSH Tünel)"
+          placeholder="http://192.168.178.59:4040 veya Cloudflare"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
 
-        <Text style={styles.label}>Özel Gemini API Anahtarı (Gömülü anahtar korumalıdır):</Text>
+        <Text style={styles.label}>Gemini API Anahtarı:</Text>
         <TextInput
           style={styles.input}
           value={geminiKey}
           onChangeText={setGeminiKey}
-          placeholder="•••••••• (Varsayılan korumalı anahtar aktif)"
+          placeholder="•••••••• (Varsayılan korumalı anahtar devrede)"
           placeholderTextColor={colors.textMuted}
           secureTextEntry={true}
           autoCapitalize="none"
@@ -268,15 +288,19 @@ export default function SettingsScreen() {
             style={styles.testBtn}
             onPress={handleTestBridge}
             disabled={testingKey}
+            activeOpacity={0.8}
           >
             {testingKey ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={styles.testBtnText}>🔌 Laptopu Test Et</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="hardware-chip-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.testBtnText}>Bağlantıyı Test Et</Text>
+              </View>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </TouchableOpacity>
         </View>
@@ -304,19 +328,19 @@ export default function SettingsScreen() {
         )}
       </View>
 
-      {/* UYGULAMA HAKKINDA */}
+      {/* SYSTEM INFO */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Sistem Bilgisi</Text>
+        <Text style={styles.cardTitle}>Sistem & Cihaz Bilgisi</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Uygulama:</Text>
-          <Text style={styles.infoValue}>Namikaze AI (PC & Antigravity Remote)</Text>
+          <Text style={styles.infoValue}>Namikaze AI (Laptop Control & Remote)</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Versiyon:</Text>
           <Text style={styles.infoValue}>v{CURRENT_VERSION}</Text>
         </View>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Hedef Bilgisayar:</Text>
+          <Text style={styles.infoLabel}>Bağlı Bilgisayar:</Text>
           <Text style={styles.infoValue}>DESKTOP-3EQ1SQ5</Text>
         </View>
       </View>
@@ -334,10 +358,10 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.surface,
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginTop: 14,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
@@ -348,12 +372,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   secureBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: colors.successSoft,
     borderWidth: 1,
     borderColor: colors.success,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   secureBadgeText: {
     color: colors.success,
@@ -364,7 +388,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 4,
   },
   description: {
     fontSize: 12,
@@ -374,73 +397,78 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontWeight: '700',
     color: colors.textSecondary,
     marginBottom: 6,
+    marginTop: 8,
+    fontWeight: '600',
   },
   input: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.inputBackground,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     color: colors.text,
-    fontSize: 14,
-    marginBottom: 14,
+    fontSize: 13,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
+    marginBottom: 8,
   },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
+    marginTop: 10,
+    gap: 8,
   },
   testBtn: {
-    backgroundColor: colors.surfaceLight,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   testBtnText: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-    fontSize: 12,
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   saveBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
   },
   saveBtnText: {
-    color: '#FFF',
+    color: colors.text,
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 13,
   },
-  savedNotice: {
-    color: colors.success,
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 12,
-    textAlign: 'center',
+  progressBarBg: {
+    height: 6,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
   },
   testResultBox: {
-    marginTop: 14,
+    marginTop: 12,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 10,
+    borderWidth: 1,
   },
   testSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderWidth: 1,
+    backgroundColor: colors.successSoft,
     borderColor: colors.success,
   },
   testError: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
+    backgroundColor: colors.dangerSoft,
     borderColor: colors.danger,
   },
   testResultText: {
@@ -451,7 +479,22 @@ const styles = StyleSheet.create({
     color: colors.success,
   },
   testErrorText: {
-    color: '#F87171',
+    color: colors.dangerLight,
+  },
+  savedNotice: {
+    color: colors.success,
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  statusBox: {
+    marginTop: 12,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    padding: 12,
+    borderRadius: 10,
   },
   infoRow: {
     flexDirection: 'row',
@@ -466,7 +509,7 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     color: colors.text,
-    fontWeight: '600',
     fontSize: 13,
+    fontWeight: '600',
   },
 });
