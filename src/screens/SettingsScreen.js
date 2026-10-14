@@ -13,9 +13,10 @@ import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { storageService } from '../services/storageService';
 import { bridgeService } from '../services/bridgeService';
+import { updateService } from '../services/updateService';
 import { APP_CONFIG } from '../config';
 
-const CURRENT_VERSION = '3.0.0';
+const CURRENT_VERSION = '3.1.0';
 const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
 
 export default function SettingsScreen() {
@@ -74,37 +75,61 @@ export default function SettingsScreen() {
     setTestingKey(false);
   };
 
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadingType, setDownloadingType] = useState(null); // 'ota' | 'apk' | null
+  const [updateStatusMsg, setUpdateStatusMsg] = useState('');
+
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
     setUpdateInfo(null);
+    setUpdateStatusMsg('');
     try {
-      const remote = await bridgeService.fetchRemoteConfig();
-      if (remote) {
-        if (remote.version && remote.version !== CURRENT_VERSION) {
-          setUpdateInfo({
-            hasUpdate: true,
-            msg: `🚀 Yeni sürüm (v${remote.version}) mevcut! Aşağıdaki "Son APK'yı İndir" butonuna dokunarak eskiyi silmeden üzerine kurabilirsiniz.`
-          });
-        } else {
-          setUpdateInfo({
-            hasUpdate: false,
-            msg: `✅ Uygulamanız güncel (v${CURRENT_VERSION}). Yine de son APK'yı indirmek için yan butonu kullanabilirsiniz.`
-          });
-        }
+      const res = await updateService.checkUpdates(CURRENT_VERSION);
+      if (res && res.ok) {
+        setUpdateInfo(res);
       } else {
-        setUpdateInfo({
-          hasUpdate: false,
-          msg: 'Güncelleme sunucusuna ulaşılamadı.'
-        });
+        setUpdateStatusMsg('Güncelleme sunucusuna ulaşılamadı.');
       }
     } catch (e) {
-      setUpdateInfo({
-        hasUpdate: false,
-        msg: 'Güncelleme sunucusuna ulaşılamadı.'
-      });
+      setUpdateStatusMsg('Güncelleme kontrolü başarısız.');
     } finally {
       setCheckingUpdate(false);
     }
+  };
+
+  const handleApplyOta = async () => {
+    if (!updateInfo?.bundleUrl) return;
+    setDownloadingType('ota');
+    setDownloadProgress(0);
+    setUpdateStatusMsg('⚡ Yeni özellik paketi indiriliyor...');
+    const res = await updateService.downloadAndApplyOta(
+      updateInfo.bundleUrl,
+      updateInfo.latestVersion,
+      (pct) => setDownloadProgress(pct)
+    );
+    if (res.ok) {
+      setUpdateStatusMsg(res.message);
+    } else {
+      setUpdateStatusMsg(`❌ Hata: ${res.error}`);
+    }
+    setDownloadingType(null);
+  };
+
+  const handleInstallApkDirect = async () => {
+    if (!updateInfo?.apkUrl) return;
+    setDownloadingType('apk');
+    setDownloadProgress(0);
+    setUpdateStatusMsg('📥 APK doğrudan indiriliyor...');
+    const res = await updateService.downloadAndInstallApk(
+      updateInfo.apkUrl,
+      (pct) => setDownloadProgress(pct)
+    );
+    if (res.ok) {
+      setUpdateStatusMsg('✅ Yükleyici açıldı. Ekrana gelen "Güncelle" butonuna basmanız yeterlidir.');
+    } else {
+      setUpdateStatusMsg(`❌ Hata: ${res.error}`);
+    }
+    setDownloadingType(null);
   };
 
   return (
@@ -113,16 +138,21 @@ export default function SettingsScreen() {
 
       {/* UYGULAMA GÜNCELLEME MERKEZİ */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Uygulama Güncelleme Merkezi 🔄</Text>
+        <View style={styles.badgeRow}>
+          <Text style={styles.cardTitle}>Uygulama Güncelleme Merkezi 🔄</Text>
+          <View style={styles.secureBadge}>
+            <Text style={styles.secureBadgeText}>v{CURRENT_VERSION}</Text>
+          </View>
+        </View>
         <Text style={styles.description}>
-          Yeni özellikler eklendiğinde eski uygulamayı silmenize gerek yoktur; yeni APK'yı indirip açtığınızda doğrudan üzerine güncellenir.
+          Yeni özellikler eklendiğinde tarayıcıya gitmeden veya eski uygulamayı silmeden tek dokunuşla güncelleyebilirsiniz.
         </Text>
 
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.testBtn}
             onPress={handleCheckUpdate}
-            disabled={checkingUpdate}
+            disabled={checkingUpdate || downloadingType !== null}
           >
             {checkingUpdate ? (
               <ActivityIndicator size="small" color="#FFF" />
@@ -130,19 +160,71 @@ export default function SettingsScreen() {
               <Text style={styles.testBtnText}>🔍 Güncelleme Kontrol Et</Text>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.saveBtn}
-            onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
-          >
-            <Text style={styles.saveBtnText}>📥 Son APK'yı İndir</Text>
-          </TouchableOpacity>
         </View>
 
+        {/* İNDİRME İLERLEME ÇUBUĞU */}
+        {downloadingType !== null && (
+          <View style={{ marginTop: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text style={{ color: colors.primaryLight, fontSize: 12, fontWeight: '700' }}>
+                {downloadingType === 'ota' ? '⚡ Sessiz Güncelleme İndiriliyor...' : '📥 APK İndiriliyor...'}
+              </Text>
+              <Text style={{ color: colors.text, fontSize: 12, fontWeight: '800' }}>
+                %{downloadProgress}
+              </Text>
+            </View>
+            <View style={{ height: 8, backgroundColor: colors.surfaceLight, borderRadius: 4, overflow: 'hidden' }}>
+              <View style={{ width: `${downloadProgress}%`, height: '100%', backgroundColor: colors.primary, borderRadius: 4 }} />
+            </View>
+          </View>
+        )}
+
+        {/* BİLGİ VE GÜNCELLEME AKSİYONLARI */}
         {updateInfo && (
-          <View style={[styles.testResultBox, styles.testSuccess]}>
-            <Text style={[styles.testResultText, styles.testSuccessText]}>
-              {updateInfo.msg}
+          <View style={{ marginTop: 14 }}>
+            {updateInfo.hasUpdate ? (
+              <View style={[styles.testResultBox, styles.testSuccess]}>
+                <Text style={[styles.testResultText, styles.testSuccessText, { fontWeight: '700', marginBottom: 6 }]}>
+                  🚀 Yeni Sürüm Hazır: v{updateInfo.latestVersion}
+                </Text>
+                <Text style={[styles.testResultText, styles.testSuccessText]}>
+                  {updateInfo.announcement || 'Yeni özellikler ve kararlılık iyileştirmeleri eklendi.'}
+                </Text>
+
+                <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+                  {/* 1. OTA GÜNCELLEME BUTONU */}
+                  <TouchableOpacity
+                    style={[styles.saveBtn, { flex: 1, backgroundColor: colors.primary }]}
+                    onPress={handleApplyOta}
+                    disabled={downloadingType !== null}
+                  >
+                    <Text style={styles.saveBtnText}>⚡ Hızlı Güncelle (Kurulumsuz)</Text>
+                  </TouchableOpacity>
+
+                  {/* 2. UYGULAMA İÇİ DOĞRUDAN APK BUTONU */}
+                  <TouchableOpacity
+                    style={[styles.testBtn, { flex: 1, borderColor: colors.primary }]}
+                    onPress={handleInstallApkDirect}
+                    disabled={downloadingType !== null}
+                  >
+                    <Text style={[styles.testBtnText, { color: colors.primaryLight }]}>📥 APK İle Güncelle</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.testResultBox, styles.testSuccess]}>
+                <Text style={[styles.testResultText, styles.testSuccessText]}>
+                  ✅ Uygulamanız en son sürümde (v{CURRENT_VERSION}).
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {updateStatusMsg !== '' && (
+          <View style={[styles.testResultBox, { backgroundColor: 'rgba(232, 122, 74, 0.15)', borderWidth: 1, borderColor: colors.primary }]}>
+            <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>
+              {updateStatusMsg}
             </Text>
           </View>
         )}

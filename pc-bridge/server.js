@@ -7,6 +7,13 @@ const path = require('path');
 const PORT = 4040;
 const QUEUE_DIR = path.join(__dirname, '..', '.agents', 'queue');
 const CLOUDFLARED_BIN = path.join(__dirname, 'cloudflared.exe');
+const LOG_FILE = path.join(__dirname, 'bridge.log');
+
+function logMsg(...args) {
+  const line = `[${new Date().toLocaleTimeString('tr-TR')}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`;
+  try { fs.appendFileSync(LOG_FILE, line, 'utf8'); } catch (e) {}
+  console.log(...args);
+}
 
 let primaryTunnelUrl = '';
 let backupTunnelUrl = '';
@@ -80,9 +87,9 @@ async function syncTunnelToGitHub() {
       "SYNC_OK"
     `;
     const res = await runPowerShell(ps);
-    console.log('🔗 Tünel GitHub ile senkronize edildi:', { bestUrl, backupTunnelUrl, lanUrl }, res.output);
+    logMsg('🔗 Tünel GitHub ile senkronize edildi:', { bestUrl, backupTunnelUrl, lanUrl }, res.output);
   } catch (e) {
-    console.error('Tunnel sync error:', e.message);
+    logMsg('Tunnel sync error:', e.message);
   } finally {
     isSyncing = false;
     if (pendingSync) {
@@ -94,22 +101,22 @@ async function syncTunnelToGitHub() {
 // 1. Birincil Kararlı Tünel: Cloudflare Quick Tunnel (trycloudflare.com)
 function startCloudflareTunnel() {
   if (!fs.existsSync(CLOUDFLARED_BIN)) {
-    console.log('⚠️ cloudflared.exe bulunamadı, yalnızca SSH tüneli kullanılacak.');
+    logMsg('⚠️ cloudflared.exe bulunamadı, yalnızca SSH tüneli kullanılacak.');
     return;
   }
-  console.log('☁️ Cloudflare HTTPS Tüneli başlatılıyor...');
+  logMsg('☁️ Cloudflare HTTPS Tüneli başlatılıyor...');
   const cf = spawn(CLOUDFLARED_BIN, [
     'tunnel',
     '--url', `http://127.0.0.1:${PORT}`,
     '--no-autoupdate'
-  ]);
+  ], { windowsHide: true });
 
   const handleCfData = (data) => {
     const text = data.toString();
     const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
     if (match && match[0] !== primaryTunnelUrl) {
       primaryTunnelUrl = match[0];
-      console.log('✅ Birincil Cloudflare Tüneli Aktif:', primaryTunnelUrl);
+      logMsg('✅ Birincil Cloudflare Tüneli Aktif:', primaryTunnelUrl);
       syncTunnelToGitHub();
     }
   };
@@ -117,7 +124,7 @@ function startCloudflareTunnel() {
   cf.stdout.on('data', handleCfData);
   cf.stderr.on('data', handleCfData);
   cf.on('close', () => {
-    console.log('🔄 Cloudflare tüneli kapandı, 3sn içinde yeniden başlatılıyor...');
+    logMsg('🔄 Cloudflare tüneli kapandı, 3sn içinde yeniden başlatılıyor...');
     primaryTunnelUrl = '';
     setTimeout(startCloudflareTunnel, 3000);
   });
@@ -125,21 +132,21 @@ function startCloudflareTunnel() {
 
 // 2. İkincil Yedek Tünel: localhost.run (127.0.0.1 IPv4 zorlamalı - 502 hatasını önler)
 function startBackupSshTunnel() {
-  console.log('🌐 Yedek SSH HTTPS Tüneli başlatılıyor...');
+  logMsg('🌐 Yedek SSH HTTPS Tüneli başlatılıyor...');
   const ssh = spawn('ssh', [
     '-o', 'StrictHostKeyChecking=no',
     '-o', 'ServerAliveInterval=30',
     '-o', 'ExitOnForwardFailure=yes',
     '-R', `80:127.0.0.1:${PORT}`,
     'nokey@localhost.run'
-  ]);
+  ], { windowsHide: true });
 
   const handleSshData = (data) => {
     const text = data.toString();
     const match = text.match(/https:\/\/[a-z0-9]+\.lhr\.life/i);
     if (match && match[0] !== backupTunnelUrl) {
       backupTunnelUrl = match[0];
-      console.log('✅ Yedek SSH Tüneli Aktif:', backupTunnelUrl);
+      logMsg('✅ Yedek SSH Tüneli Aktif:', backupTunnelUrl);
       syncTunnelToGitHub();
     }
   };
@@ -147,7 +154,7 @@ function startBackupSshTunnel() {
   ssh.stdout.on('data', handleSshData);
   ssh.stderr.on('data', handleSshData);
   ssh.on('close', () => {
-    console.log('🔄 Yedek SSH tüneli yenileniyor...');
+    logMsg('🔄 Yedek SSH tüneli yenileniyor...');
     backupTunnelUrl = '';
     setTimeout(startBackupSshTunnel, 4000);
   });

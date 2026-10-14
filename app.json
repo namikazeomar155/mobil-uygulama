@@ -2,7 +2,7 @@
   "expo": {
     "name": "Namikaze AI",
     "slug": "mobil-uygulama",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -18,6 +18,10 @@
     },
     "android": {
       "package": "com.omar.auraai",
+      "permissions": [
+        "REQUEST_INSTALL_PACKAGES",
+        "INTERNET"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FAF1EE"

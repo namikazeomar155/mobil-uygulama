@@ -15,7 +15,7 @@ import { colors } from '../theme/colors';
 import Header from '../components/Header';
 import { bridgeService } from '../services/bridgeService';
 
-const CURRENT_VERSION = '3.0.0';
+const CURRENT_VERSION = '3.1.0';
 const APK_DOWNLOAD_URL = 'https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk';
 
 export default function HomeScreen({ onNavigate }) {
@@ -112,11 +112,11 @@ export default function HomeScreen({ onNavigate }) {
       {hasNewUpdate && (
         <TouchableOpacity
           style={styles.updateBanner}
-          onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+          onPress={() => onNavigate('settings')}
         >
           <Text style={styles.updateTitle}>🚀 Yeni Sürüm Hazır (v{remoteConfig.version})!</Text>
           <Text style={styles.updateSub}>
-            Eski uygulamayı silmeden tek dokunuşla üzerine güncellemek için dokunun.
+            Uygulama içinden tek dokunuşla sessizce güncellemek için buraya dokunun.
           </Text>
         </TouchableOpacity>
       )}

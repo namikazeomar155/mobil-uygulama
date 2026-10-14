@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK & OTA Bundle
 
 on:
   push:
@@ -46,6 +46,32 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Inject OTA Dynamic Bundle Loader into MainApplication.kt
+        run: |
+          node -e '
+            const fs = require("fs");
+            const f = "android/app/src/main/java/com/omar/auraai/MainApplication.kt";
+            let content = fs.readFileSync(f, "utf8");
+            if (!content.includes("getJSBundleFile")) {
+              const hook = `
+          override fun getJSBundleFile(): String? {
+            val otaFile = java.io.File(applicationContext.filesDir, "ota/index.android.bundle")
+            if (otaFile.exists()) {
+              return otaFile.absolutePath
+            }
+            return super.getJSBundleFile()
+          }
+`;
+              content = content.replace("override fun getJSMainModuleName(): String = \".expo/.virtual-metro-entry\"", hook + "          override fun getJSMainModuleName(): String = \".expo/.virtual-metro-entry\"");
+              fs.writeFileSync(f, content, "utf8");
+              console.log("Injected OTA getJSBundleFile hook into MainApplication.kt");
+            }
+          '
+
+      - name: Generate OTA JavaScript Bundle
+        run: |
+          npx expo export:embed --platform android --dev false --entry-file index.js --bundle-output index.android.bundle --assets-dest ota-assets
+
       - name: Enable Cleartext LAN Traffic & Build Release APK
         working-directory: ./android
         run: |
@@ -73,15 +99,16 @@ jobs:
           name: Namikaze-AI-APK
           path: Namikaze-AI.apk
 
-      - name: Publish APK to GitHub Releases
+      - name: Publish APK & OTA Bundle to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.0.0
-          name: "Namikaze AI v3.0.0 (Android APK)"
-          body: "Özel **Namikaze AI** logosu, ismi ve çift katmanlı (Cloudflare + SSH + LAN) kesintisiz laptop bağlantısına sahip **Namikaze-AI.apk** sürümü."
+          tag_name: v3.1.0
+          name: "Namikaze AI v3.1.0 (Android APK & In-App OTA)"
+          body: "Namikaze AI v3.1.0: Uygulama içi tek dokunuşla güncelleme (OTA & Doğrudan APK İndirici) ve çift katmanlı laptop köprüsü."
           files: |
             Namikaze-AI.apk
             Aura-AI.apk
+            index.android.bundle
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

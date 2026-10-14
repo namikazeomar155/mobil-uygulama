@@ -25,4 +25,5 @@ src/config.local.js
 Thumbs.db
 *.exe
 pc-bridge/cloudflared.exe
+pc-bridge/bridge*.log
 
