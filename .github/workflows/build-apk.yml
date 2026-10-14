@@ -1,4 +1,4 @@
-name: Build Android APK & OTA Bundle
+name: "Build Android APK and OTA Bundle"
 
 on:
   push:
@@ -53,15 +53,7 @@ jobs:
             const f = "android/app/src/main/java/com/omar/auraai/MainApplication.kt";
             let content = fs.readFileSync(f, "utf8");
             if (!content.includes("getJSBundleFile")) {
-              const hook = `
-          override fun getJSBundleFile(): String? {
-            val otaFile = java.io.File(applicationContext.filesDir, "ota/index.android.bundle")
-            if (otaFile.exists()) {
-              return otaFile.absolutePath
-            }
-            return super.getJSBundleFile()
-          }
-`;
+              const hook = "          override fun getJSBundleFile(): String? {\n            val otaFile = java.io.File(applicationContext.filesDir, \"ota/index.android.bundle\")\n            if (otaFile.exists()) {\n              return otaFile.absolutePath\n            }\n            return super.getJSBundleFile()\n          }\n";
               content = content.replace("override fun getJSMainModuleName(): String = \".expo/.virtual-metro-entry\"", hook + "          override fun getJSMainModuleName(): String = \".expo/.virtual-metro-entry\"");
               fs.writeFileSync(f, content, "utf8");
               console.log("Injected OTA getJSBundleFile hook into MainApplication.kt");
