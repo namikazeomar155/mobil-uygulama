@@ -61,13 +61,13 @@ async function syncTunnelToGitHub() {
   try {
     const lanUrl = `http://${getLocalLanIp()}:${PORT}`;
     const cfgPath = path.join(__dirname, '..', 'remote-config.json');
-    let currentCfg = { version: '3.0.0', announcement: '' };
+    let currentCfg = { version: '3.2.0', announcement: '' };
     if (fs.existsSync(cfgPath)) {
       try {
         currentCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
       } catch (e) {}
     }
-    currentCfg.version = '3.0.0';
+    currentCfg.version = currentCfg.version || '3.2.0';
     currentCfg.bridgeUrl = bestUrl;
     currentCfg.backupTunnelUrl = backupTunnelUrl || bestUrl;
     currentCfg.lanUrl = lanUrl;
