@@ -279,6 +279,23 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, processes: list }));
   }
 
+  // 3.5. CANLI YAPILANDIRMA VE DİREKT OTA PAKETİ (/remote-config & /bundle)
+  if (req.method === 'GET' && (url === '/remote-config' || url.startsWith('/remote-config?'))) {
+    const cfgPath = path.join(__dirname, '..', 'remote-config.json');
+    if (fs.existsSync(cfgPath)) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+      return res.end(fs.readFileSync(cfgPath, 'utf8'));
+    }
+  }
+
+  if (req.method === 'GET' && (url === '/bundle' || url.startsWith('/bundle?'))) {
+    const bundlePath = path.join(__dirname, '..', 'index.android.bundle');
+    if (fs.existsSync(bundlePath)) {
+      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+      return res.end(fs.readFileSync(bundlePath));
+    }
+  }
+
   let body = '';
   req.on('data', chunk => { body += chunk; });
   req.on('end', async () => {

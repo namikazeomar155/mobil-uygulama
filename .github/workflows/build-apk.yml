@@ -94,9 +94,9 @@ jobs:
       - name: Publish APK & OTA Bundle to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.1.0
-          name: "Namikaze AI v3.1.0 (Android APK & In-App OTA)"
-          body: "Namikaze AI v3.1.0: Uygulama içi tek dokunuşla güncelleme (OTA & Doğrudan APK İndirici) ve çift katmanlı laptop köprüsü."
+          tag_name: v3.4.0
+          name: "Namikaze AI v3.4.0 (Android APK & In-App OTA)"
+          body: "Namikaze AI v3.4.0: Yepyeni net, profesyonel arayüz tasarımı, Ionicons ve canlı renkler."
           files: |
             Namikaze-AI.apk
             Aura-AI.apk
