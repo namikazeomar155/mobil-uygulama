@@ -10,10 +10,21 @@ let lastWorkingUrl = '';
 
 export const bridgeService = {
   /**
-   * GitHub API üzerinden (0 saniye önbellek gecikmesiyle) canlı laptop tünel adreslerini çeker
+   * GitHub üzerinden canlı laptop tünel adreslerini çeker
    */
   async fetchRemoteConfig() {
-    // 1. Önce GitHub REST API (CDN önbelleğine takılmaz, anında güncel veriyi döner)
+    // 1. GitHub Raw URL (taze zaman damgasıyla)
+    try {
+      const rawRes = await fetch(`${RAW_CONFIG_URL}?t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (rawRes.ok) {
+        const data = await rawRes.json();
+        if (data && (data.bridgeUrl || data.version)) return data;
+      }
+    } catch (e) {}
+
+    // 2. GitHub REST API
     try {
       const apiRes = await fetch(`${GITHUB_API_CONFIG_URL}?ref=main&_=${Date.now()}`, {
         headers: {
@@ -23,19 +34,7 @@ export const bridgeService = {
       });
       if (apiRes.ok) {
         const data = await apiRes.json();
-        if (data && (data.bridgeUrl || data.version)) {
-          return data;
-        }
-      }
-    } catch (e) {}
-
-    // 2. Yedek: GitHub Raw URL
-    try {
-      const rawRes = await fetch(`${RAW_CONFIG_URL}?t=${Date.now()}`, {
-        headers: { 'Cache-Control': 'no-cache' },
-      });
-      if (rawRes.ok) {
-        return await rawRes.json();
+        if (data && (data.bridgeUrl || data.version)) return data;
       }
     } catch (e) {}
 
@@ -45,11 +44,9 @@ export const bridgeService = {
   async discoverBridgeUrl(forceRefresh = false) {
     try {
       const settings = await storageService.getSettings();
-      if (settings.customBridgeUrl && settings.customBridgeUrl.trim() !== '') {
-        return settings.customBridgeUrl.trim().replace(/\/$/, '');
-      }
+      const customUrl = (settings.customBridgeUrl || '').trim().replace(/\/$/, '');
 
-      if (lastWorkingUrl && !forceRefresh) {
+      if (!forceRefresh && lastWorkingUrl) {
         return lastWorkingUrl;
       }
 
@@ -60,17 +57,18 @@ export const bridgeService = {
         if (cfg.lanUrl) cachedLanUrl = cfg.lanUrl.replace(/\/$/, '');
       }
 
-      return cachedBridgeUrl || cachedBackupUrl || cachedLanUrl;
+      return customUrl || cachedBridgeUrl || cachedBackupUrl || cachedLanUrl;
     } catch (e) {
       return cachedBridgeUrl || cachedBackupUrl || cachedLanUrl;
     }
   },
 
   /**
-   * Çoklu Tünel & Otomatik Yedekli (Cloudflare -> SSH Tunnel -> Yerel Wi-Fi LAN) Köprü İsteği
+   * Hızlı Yarış (Fast Race / Cascade) ile Köprü İsteği
+   * Cloudflare -> SSH Tüneli -> Yerel Wi-Fi LAN
    */
   async request(endpoint, options = {}) {
-    const tryFetch = async (url, timeoutMs = 9000) => {
+    const tryFetch = async (url, timeoutMs = 4500) => {
       if (!url) throw new Error('Boş URL');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -95,32 +93,42 @@ export const bridgeService = {
       }
     };
 
-    // 1. Önce bilinen en son çalışan veya keşfedilen birincil adresi dene
-    const primaryUrl = await this.discoverBridgeUrl(false);
-    try {
-      return await tryFetch(primaryUrl, 8000);
-    } catch (firstErr) {
-      // 2. Başarısız olursa GitHub API'den taze tünel listesini çek ve tüm adayları sırayla dene
-      await this.discoverBridgeUrl(true);
-      const candidates = [
-        cachedBridgeUrl,
-        cachedBackupUrl,
-        cachedLanUrl,
-      ].filter((u, idx, arr) => u && arr.indexOf(u) === idx);
-
-      for (const candidate of candidates) {
-        try {
-          return await tryFetch(candidate, 7000);
-        } catch (err) {
-          // Sonraki adaya geç
-        }
+    // 1. Öncelikli olarak bilinen son çalışan adresi hızlıca dene (3.5 saniye)
+    if (lastWorkingUrl) {
+      try {
+        return await tryFetch(lastWorkingUrl, 3500);
+      } catch (e) {
+        lastWorkingUrl = ''; // Eski adres çökmüş, hafızayı temizle
       }
-
-      return {
-        ok: false,
-        error: 'Laptop köprüsüne ulaşılamadı. Bilgisayarınızın açık ve internete bağlı olduğundan emin olun.',
-      };
     }
+
+    // 2. Taze yapılandırmayı çek
+    await this.discoverBridgeUrl(true);
+    const settings = await storageService.getSettings().catch(() => ({}));
+    const customUrl = (settings?.customBridgeUrl || '').trim().replace(/\/$/, '');
+
+    // Sıralı Aday Listesi
+    const candidates = [
+      customUrl,
+      cachedBridgeUrl,
+      cachedBackupUrl,
+      cachedLanUrl,
+      'https://leasing-wrist-surely-athletes.trycloudflare.com', // Anlık aktif tünel
+    ].filter((u, idx, arr) => u && arr.indexOf(u) === idx);
+
+    // Her adayı sırayla hızlı dene (3.5 saniye)
+    for (const candidate of candidates) {
+      try {
+        return await tryFetch(candidate, 3500);
+      } catch (err) {
+        // Sonraki adaya geç
+      }
+    }
+
+    return {
+      ok: false,
+      error: 'Laptop köprüsüne ulaşılamadı. Bilgisayarınızın açık ve internete bağlı olduğundan emin olun.',
+    };
   },
 
   async getStatus() {
