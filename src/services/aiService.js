@@ -368,14 +368,14 @@ export const aiService = {
 
     // 2. API Anahtarını Doğrula
     const settings = await storageService.getSettings();
-    let apiKey = settings.geminiApiKey;
+    let apiKey = settings?.geminiApiKey;
 
     if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey.trim() === '') {
       apiKey = APP_CONFIG?.GEMINI_API_KEY || '';
     }
 
     if (!apiKey || apiKey.trim() === '') {
-      return '⚠️ API anahtarı bulunamadı. Lütfen Ayarlar sekmesini kontrol edin.';
+      apiKey = APP_CONFIG?.GEMINI_API_KEY || '';
     }
 
     try {

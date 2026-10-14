@@ -1,11 +1,11 @@
 {
   "lanUrl": "http://192.168.178.59:4040",
   "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "bridgeUrl": "https://leasing-wrist-surely-athletes.trycloudflare.com",
   "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
-  "announcement": "⚡ Namikaze AI v3.3: 503 API Hatası Düzeltildi! Anında Çevrimdışı PC Komut Motoru (0.05sn tepki) + Çoklu Model Otomatik Hata Kurtarma (Failover Cascade) + Header Logo Düzeltmesi!",
-  "updatedAt": "2026-10-14T17:12:17.739Z",
+  "announcement": "⚡ Namikaze AI v3.3.1: API anahtarı varsayılan olarak entegre edildi, artık manuel giriş gerektirmez!",
+  "updatedAt": "2026-10-14T17:16:00.000Z",
   "backupTunnelUrl": "https://b9b85e55451a6a.lhr.life",
-  "bundleVersion": "3.3.0"
+  "bundleVersion": "3.3.1"
 }

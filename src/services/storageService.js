@@ -13,19 +13,19 @@ export const storageService = {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (data) {
         const parsed = JSON.parse(data);
-        if (parsed.geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE' || parsed.geminiApiKey === APP_CONFIG?.GEMINI_API_KEY) {
-          parsed.geminiApiKey = '';
+        if (!parsed.geminiApiKey || parsed.geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE' || parsed.geminiApiKey.trim() === '') {
+          parsed.geminiApiKey = APP_CONFIG.GEMINI_API_KEY;
         }
         return parsed;
       }
       return {
-        geminiApiKey: '',
+        geminiApiKey: APP_CONFIG.GEMINI_API_KEY,
         customBridgeUrl: '',
         userName: 'Omar',
         isDarkMode: true,
       };
     } catch (e) {
-      return { geminiApiKey: '', customBridgeUrl: '', userName: 'Omar', isDarkMode: true };
+      return { geminiApiKey: APP_CONFIG.GEMINI_API_KEY, customBridgeUrl: '', userName: 'Omar', isDarkMode: true };
     }
   },
 
