@@ -10,7 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../theme/colors';
 import Header from '../components/Header';

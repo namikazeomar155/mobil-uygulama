@@ -199,8 +199,8 @@ const server = http.createServer(async (req, res) => {
       lanUrl: `http://${getLocalLanIp()}:${PORT}`,
       bridgeUrl: primaryTunnelUrl || backupTunnelUrl,
       backupTunnelUrl,
-      version: '3.4.1',
-      announcement: '✨ Namikaze AI v3.4.1: Çevrimdışı komutlar ve C# ekran görüntüsü motoru',
+      version: '3.4.2',
+      announcement: '✨ Namikaze AI v3.4.2: Çevrimdışı komutlar ve C# ekran görüntüsü motoru',
       updatedAt: new Date().toISOString(),
     }));
   }

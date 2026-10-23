@@ -2,7 +2,7 @@
   "expo": {
     "name": "Namikaze AI",
     "slug": "mobil-uygulama",
-    "version": "3.4.1",
+    "version": "3.4.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.omar.auraai",
-      "versionCode": 341,
+      "versionCode": 342,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES",
         "INTERNET"

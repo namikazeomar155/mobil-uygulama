@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Provider as PaperProvider, MD3DarkTheme } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from './src/components/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { colors } from './src/theme/colors';
 
