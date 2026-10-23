@@ -1,11 +1,11 @@
 {
-    "lanUrl":  "http://192.168.178.51:4040",
-    "apkUrl":  "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
-    "version":  "3.4.2",
-    "bridgeUrl":  "https://antonio-illustrations-clinical-antonio.trycloudflare.com",
-    "bundleUrl":  "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
-    "announcement":  "? Namikaze AI v3.4.2: G�r�n�r ikonlar, �evrimdisi komutlar ve kesintisiz baglanti!",
-    "updatedAt":  "2026-10-23T19:42:12.196Z",
-    "backupTunnelUrl":  "https://853d54f95ee1ed.lhr.life",
-    "bundleVersion":  "3.4.2"
+  "lanUrl": "http://192.168.178.51:4040",
+  "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
+  "version": "3.4.2",
+  "bridgeUrl": "https://antonio-illustrations-clinical-antonio.trycloudflare.com",
+  "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
+  "announcement": "✨ Namikaze AI v3.4.2: Görünür ikonlar, çevrimdışı komutlar ve kesintisiz bağlantı!",
+  "updatedAt": "2026-10-23T19:42:12.196Z",
+  "backupTunnelUrl": "https://853d54f95ee1ed.lhr.life",
+  "bundleVersion": "3.4.2"
 }
