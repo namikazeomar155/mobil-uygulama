@@ -70,7 +70,8 @@ export default function HomeScreen({ onNavigate }) {
     if (res && res.ok && res.image) {
       setScreenshot({ uri: res.image, time: res.timestamp });
     } else {
-      showToast('⚠️ Ekran görüntüsü alınamadı');
+      const errMsg = res?.error || 'Ekran görüntüsü alınamadı';
+      showToast(`⚠️ ${errMsg}`);
     }
     setLoadingShot(false);
   };

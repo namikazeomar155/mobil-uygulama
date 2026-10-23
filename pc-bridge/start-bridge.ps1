@@ -18,10 +18,10 @@ Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
 
 Set-Content -Path $logFile -Value "" -Encoding UTF8
 
-# WScript.Shell ile tamamen bagimsiz Windows arka plan sureci olarak baslat
-$wsh = New-Object -ComObject WScript.Shell
-$wsh.CurrentDirectory = $projectDir
-$wsh.Run("node.exe `"$bridgeDir\server.js`"", 0, $false)
+# Windows arka plan sureci olarak baslat
+$nodeExe = "C:\Program Files\nodejs\node.exe"
+if (-not (Test-Path $nodeExe)) { $nodeExe = "node.exe" }
+Start-Process -FilePath $nodeExe -ArgumentList "`"$bridgeDir\server.js`"" -WorkingDirectory $bridgeDir -WindowStyle Hidden
 
 if ($ShowPopup) {
   Start-Sleep -Seconds 4

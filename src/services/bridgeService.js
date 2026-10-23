@@ -5,38 +5,57 @@ const RAW_CONFIG_URL = 'https://raw.githubusercontent.com/namikazeomar155/mobil-
 
 let cachedBridgeUrl = '';
 let cachedBackupUrl = '';
-let cachedLanUrl = 'http://192.168.178.59:4040';
+let cachedLanUrl = 'http://192.168.178.51:4040';
 let lastWorkingUrl = '';
 
 export const bridgeService = {
   /**
-   * GitHub üzerinden canlı laptop tünel adreslerini çeker
+   * Canlı laptop tünel adreslerini çeker (GitHub Raw -> GitHub API -> Yerel LAN)
    */
   async fetchRemoteConfig() {
-    // 1. GitHub Raw URL (taze zaman damgasıyla)
-    try {
-      const rawRes = await fetch(`${RAW_CONFIG_URL}?t=${Date.now()}`, {
-        headers: { 'Cache-Control': 'no-cache' },
-      });
-      if (rawRes.ok) {
-        const data = await rawRes.json();
-        if (data && (data.bridgeUrl || data.version)) return data;
+    const fetchWithTimeout = async (url, headers = {}, timeoutMs = 4000) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store',
+            Pragma: 'no-cache',
+            ...headers,
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (res.ok) return await res.json();
+      } catch (e) {
+        clearTimeout(timer);
       }
-    } catch (e) {}
+      return null;
+    };
 
-    // 2. GitHub REST API
-    try {
-      const apiRes = await fetch(`${GITHUB_API_CONFIG_URL}?ref=main&_=${Date.now()}`, {
-        headers: {
-          Accept: 'application/vnd.github.raw+json',
-          'Cache-Control': 'no-cache',
-        },
-      });
-      if (apiRes.ok) {
-        const data = await apiRes.json();
-        if (data && (data.bridgeUrl || data.version)) return data;
+    // 1. GitHub Raw URL (hızlı 3.5s zaman aşımı)
+    const rawData = await fetchWithTimeout(`${RAW_CONFIG_URL}?_t=${Date.now()}`);
+    if (rawData && (rawData.bridgeUrl || rawData.version)) {
+      return rawData;
+    }
+
+    // 2. GitHub REST API (GitHub mobil istemcilerde User-Agent başlığını zorunlu tutar)
+    const apiData = await fetchWithTimeout(
+      `${GITHUB_API_CONFIG_URL}?ref=main&_t=${Date.now()}`,
+      {
+        Accept: 'application/vnd.github.raw+json',
+        'User-Agent': 'Namikaze-AI-Mobile-Client',
       }
-    } catch (e) {}
+    );
+    if (apiData && (apiData.bridgeUrl || apiData.version)) {
+      return apiData;
+    }
+
+    // 3. Yerel Wi-Fi ağı üzerindeyse doğrudan laptoptan çek
+    const lanData = await fetchWithTimeout(`${cachedLanUrl}/remote-config?_t=${Date.now()}`, {}, 2000);
+    if (lanData && (lanData.bridgeUrl || lanData.version)) {
+      return lanData;
+    }
 
     return null;
   },
@@ -64,11 +83,15 @@ export const bridgeService = {
   },
 
   /**
-   * Hızlı Yarış (Fast Race / Cascade) ile Köprü İsteği
-   * Cloudflare -> SSH Tüneli -> Yerel Wi-Fi LAN
+   * Çoklu Tünel & Yedekli Köprü İsteği
+   * Özel URL -> Cloudflare Quick Tunnel -> SSH Tunnel -> Yerel Wi-Fi LAN
    */
   async request(endpoint, options = {}) {
-    const tryFetch = async (url, timeoutMs = 4500) => {
+    const isScreenshot = endpoint === '/screenshot';
+    // Ekran görüntüsü Windows render + Base64 aktarımı nedeniyle 15 saniye alır; sistem telemetrisi 5.5 saniye
+    const defaultTimeout = isScreenshot ? 15000 : 5500;
+
+    const tryFetch = async (url, timeoutMs = defaultTimeout) => {
       if (!url) throw new Error('Boş URL');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -93,12 +116,15 @@ export const bridgeService = {
       }
     };
 
-    // 1. Öncelikli olarak bilinen son çalışan adresi hızlıca dene (3.5 saniye)
+    // 1. Öncelikli olarak bilinen son çalışan adresi dene
     if (lastWorkingUrl) {
       try {
-        return await tryFetch(lastWorkingUrl, 3500);
+        return await tryFetch(lastWorkingUrl);
       } catch (e) {
-        lastWorkingUrl = ''; // Eski adres çökmüş, hafızayı temizle
+        // Ekran görüntüsü gecikti diye köprü bağlantısını koparma
+        if (!isScreenshot) {
+          lastWorkingUrl = '';
+        }
       }
     }
 
@@ -113,13 +139,13 @@ export const bridgeService = {
       cachedBridgeUrl,
       cachedBackupUrl,
       cachedLanUrl,
-      'https://leasing-wrist-surely-athletes.trycloudflare.com', // Anlık aktif tünel
+      'http://192.168.178.51:4040',
     ].filter((u, idx, arr) => u && arr.indexOf(u) === idx);
 
-    // Her adayı sırayla hızlı dene (3.5 saniye)
+    // Her adayı sırayla dene
     for (const candidate of candidates) {
       try {
-        return await tryFetch(candidate, 3500);
+        return await tryFetch(candidate);
       } catch (err) {
         // Sonraki adaya geç
       }

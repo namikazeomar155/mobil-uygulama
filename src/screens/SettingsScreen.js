@@ -267,7 +267,7 @@ export default function SettingsScreen() {
           style={styles.input}
           value={customBridgeUrl}
           onChangeText={setCustomBridgeUrl}
-          placeholder="http://192.168.178.59:4040 veya Cloudflare"
+          placeholder="http://192.168.178.51:4040 veya Cloudflare"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />

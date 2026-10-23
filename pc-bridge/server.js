@@ -31,7 +31,7 @@ function getLocalLanIp() {
       }
     }
   }
-  return '192.168.178.59';
+  return '192.168.178.51';
 }
 
 function runPowerShell(psCommand) {
@@ -181,15 +181,16 @@ function getCpuUsagePercent() {
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Bypass-Tunnel-Reminder');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Bypass-Tunnel-Reminder, User-Agent');
 
-  if (req.method === 'OPTIONS') {
+  if (req.method === 'OPTIONS' || req.method === 'HEAD') {
     res.writeHead(200);
     return res.end();
   }
 
   const url = req.url.split('?')[0];
+  logMsg(`📡 [${req.method}] ${req.url} (ip: ${req.socket?.remoteAddress || 'unknown'})`);
 
   // 1. CANLI SİSTEM DURUMU (/status)
   if (req.method === 'GET' && (url === '/status' || url === '/')) {
@@ -226,39 +227,35 @@ const server = http.createServer(async (req, res) => {
 
   // 2. CANLI EKRAN GÖRÜNTÜSÜ (/screenshot)
   if (req.method === 'GET' && url === '/screenshot') {
-    const psScreenshot = `
-      Add-Type -AssemblyName System.Windows.Forms
-      Add-Type -AssemblyName System.Drawing
-      $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-      $bmp = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
-      $graphics = [System.Drawing.Graphics]::FromImage($bmp)
-      $graphics.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
-      
-      $targetW = 1280
-      $targetH = [int]($screen.Height * (1280 / $screen.Width))
-      $resized = New-Object System.Drawing.Bitmap($targetW, $targetH)
-      $g2 = [System.Drawing.Graphics]::FromImage($resized)
-      $g2.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-      $g2.DrawImage($bmp, 0, 0, $targetW, $targetH)
+    const exePath = path.join(__dirname, 'screenshot.exe');
+    if (fs.existsSync(exePath)) {
+      exec(`"${exePath}"`, { maxBuffer: 15 * 1024 * 1024, timeout: 15000 }, (err, stdout, stderr) => {
+        const out = (stdout || '').trim();
+        const errOut = (stderr || '').trim();
+        const isLocked = errOut.toLowerCase().includes('handle is invalid') || (err && err.message.toLowerCase().includes('handle is invalid'));
 
-      $ms = New-Object System.IO.MemoryStream
-      $resized.Save($ms, [System.Drawing.Imaging.ImageFormat]::Jpeg)
-      $bytes = $ms.ToArray()
-      $g2.Dispose()
-      $resized.Dispose()
-      $graphics.Dispose()
-      $bmp.Dispose()
-      $ms.Dispose()
-      [Convert]::ToBase64String($bytes)
-    `;
-    const result = await runPowerShell(psScreenshot);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({
-      ok: result.ok && result.output.length > 100,
-      image: result.output ? `data:image/jpeg;base64,${result.output}` : null,
-      error: result.error,
-      timestamp: new Date().toLocaleTimeString('tr-TR'),
-    }));
+        if (isLocked || errOut.startsWith('ERR:') || (!err && out.length < 100 && errOut)) {
+          const errText = isLocked ? 'Laptop ekranı kilitli veya uyku modunda' : (errOut.replace('ERR:', '').trim() || err?.message || 'Ekran görüntüsü alınamadı');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            ok: false,
+            error: errText,
+            isLocked,
+            timestamp: new Date().toLocaleTimeString('tr-TR'),
+          }));
+        }
+
+        const hasImage = !err && out.length > 100;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          ok: hasImage,
+          image: hasImage ? `data:image/jpeg;base64,${out}` : null,
+          error: hasImage ? '' : (errOut || err?.message || 'Görüntü oluşturulamadı'),
+          timestamp: new Date().toLocaleTimeString('tr-TR'),
+        }));
+      });
+      return;
+    }
   }
 
   // 3. AÇIK UYGULAMALAR VE İŞLEMLER (/processes)
