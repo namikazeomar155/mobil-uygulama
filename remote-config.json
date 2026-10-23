@@ -2,10 +2,10 @@
   "lanUrl": "http://192.168.178.59:4040",
   "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
   "version": "3.4.0",
-  "bridgeUrl": "https://cassette-specialty-herbal-let.trycloudflare.com",
+  "bridgeUrl": "https://api.trycloudflare.com",
   "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
   "announcement": "✨ Namikaze AI v3.4.0: Yepyeni net, profesyonel ve akıcı arayüz tasarımı, Ionicons ve canlı renkler!",
-  "updatedAt": "2026-10-23T15:02:53.722Z",
-  "backupTunnelUrl": "https://b97be0f5f9763d.lhr.life",
+  "updatedAt": "2026-10-23T18:44:29.603Z",
+  "backupTunnelUrl": "https://api.trycloudflare.com",
   "bundleVersion": "3.4.0"
 }
