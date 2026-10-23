@@ -2,10 +2,10 @@
   "lanUrl": "http://192.168.178.51:4040",
   "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
   "version": "3.4.1",
-  "bridgeUrl": "https://f5b14c3c360753.lhr.life",
+  "bridgeUrl": "https://antonio-illustrations-clinical-antonio.trycloudflare.com",
   "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
   "announcement": "✨ Namikaze AI v3.4.1: Çevrimdışı komutlar, C# ekran görüntüsü motoru ve kesintisiz bağlantı!",
-  "updatedAt": "2026-10-23T19:40:47.902Z",
+  "updatedAt": "2026-10-23T19:40:52.149Z",
   "backupTunnelUrl": "https://f5b14c3c360753.lhr.life",
   "bundleVersion": "3.4.1"
 }
