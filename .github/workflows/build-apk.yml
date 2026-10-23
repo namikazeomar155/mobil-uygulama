@@ -91,12 +91,18 @@ jobs:
           name: Namikaze-AI-APK
           path: Namikaze-AI.apk
 
+      - name: Get Version
+        id: get_version
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
       - name: Publish APK & OTA Bundle to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.4.0
-          name: "Namikaze AI v3.4.0 (Android APK & In-App OTA)"
-          body: "Namikaze AI v3.4.0: Yepyeni net, profesyonel arayüz tasarımı, Ionicons ve canlı renkler."
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: "Namikaze AI v${{ steps.get_version.outputs.version }} (Android APK & In-App OTA)"
+          body: "Namikaze AI v${{ steps.get_version.outputs.version }}: Hızlı çevrimdışı komutlar, C# ekran görüntüsü motoru, canlı Wi-Fi tünel keşfi ve gelişmiş yapay zeka hata yönetimi."
           files: |
             Namikaze-AI.apk
             Aura-AI.apk

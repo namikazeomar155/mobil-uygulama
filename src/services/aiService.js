@@ -4,11 +4,10 @@ import { APP_CONFIG } from '../config';
 
 // Otomatik hata kurtarmalı, yedekli model listesi (503/429/network hatasında sıradakine geçer)
 const CANDIDATE_MODELS = [
-  'gemini-flash-lite-latest', // En hızlı, 200 OK yanıt veren, sıfır gecikmeli model
-  'gemini-3.5-flash-lite',    // Kararlı yedek model
-  'gemini-3.8-flash',         // Yüksek kapasiteli model
-  'gemini-3.7-flash',         // Alternatif model
-  'gemini-flash-latest',      // Stabil genel flash
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash',
+  'gemini-1.5-pro',
 ];
 
 const LAPTOP_TOOLS = [
@@ -179,117 +178,137 @@ export const aiService = {
    */
   async matchDirectCommand(rawInput) {
     if (!rawInput) return null;
-    const text = rawInput.trim().toLowerCase();
+    const text = rawInput.trim();
+    const lower = text.toLowerCase();
 
-    // 1. Bilgisayarı kapat / Kapat
-    if (
-      /^(bilgisayar[ıi]|laptop[u]?|pc)?\s*(kapat|kapatılsın|turn off|shutdown|power off)$/i.test(text) ||
-      text === 'kapat' || text === 'bilgisayarı kapat' || text === 'kapat laptopu' || text === 'laptopu kapat'
-    ) {
-      const res = await bridgeService.sendAction('shutdown_pc');
-      return `🔌 **Laptop Kapatılıyor!**\nSistem 15 saniye içinde güvenli bir şekilde kapatılacaktır.\n_${res.output || 'Komut laptoba başarıyla iletildi.'}_`;
+    const runAction = async (action, target, successMsg) => {
+      const res = await bridgeService.sendAction(action, target);
+      if (res && res.ok) {
+        return typeof successMsg === 'function' ? successMsg(res) : successMsg;
+      }
+      return `⚠️ **Laptop Bağlantı Hatası:** ${res?.error || 'Komut uygulanamadı. Laptop köprüsünün açık ve bağlı olduğundan emin olun.'}`;
+    };
+
+    // 1. Sesli Konuşma / TTS (örn: 'Laptopta sesli "Selam Omar" de', 'sesli merhaba de', 'laptopa konuş: nasılsın')
+    if (/(?:sesli(?:\s+olarak)?|konuş|seslendir|söyle)\s*[:"]?\s*([^"]+)/i.test(text) || (lower.includes('sesli') && (lower.includes('de') || lower.includes('söyle')))) {
+      const match = text.match(/(?:sesli(?:\s+olarak)?|konuş|seslendir|söyle)\s*[:"]?\s*([^"]+)["]?/i);
+      let toSpeak = match ? match[1].replace(/\s+(?:de|söyle)$/i, '').trim() : text.replace(/^.*?(?:sesli|konuş|seslendir)\s*/i, '').replace(/\s+(?:de|söyle)$/i, '').trim();
+      if (toSpeak) {
+        return await runAction('speak_text', toSpeak, (res) => `🗣️ **Laptop Hoparlöründen Seslendirildi:**\n"${toSpeak}"\n_${res.output || 'Komut uygulandı.'}_`);
+      }
     }
 
-    // 2. Yeniden başlat
-    if (
-      /^(bilgisayar[ıi]|laptop[u]?|pc)?\s*(yeniden başlat|restart|reboot)$/i.test(text) ||
-      text === 'yeniden başlat' || text === 'restart'
-    ) {
-      const res = await bridgeService.sendAction('restart_pc');
-      return `🔄 **Laptop Yeniden Başlatılıyor!**\nSistem 15 saniye içinde yeniden başlatılacaktır.\n_${res.output || 'Komut laptoba başarıyla iletildi.'}_`;
+    // 2. Dosya Listeleme ve Arama (örn: 'Masaüstündeki dosyaları listele', 'dosyaları göster', 'dosya ara rapor')
+    if ((/(masaüst|desktop)/i.test(lower) && /(dosya|neler|listele|göster|bak)/i.test(lower)) || /dosya(ları)?\s*(listele|göster|ara)/i.test(lower)) {
+      const kwMatch = text.match(/(?:ara|bul|listele)\s+([a-zA-Z0-9_.-]+)/i);
+      const target = kwMatch ? kwMatch[1] : '';
+      return await runAction('search_files', target, (res) => `📁 **Laptop Dosya Listesi ("${target || 'Masaüstü'}"):**\n\`\`\`\n${res.output || 'Dosya bulunamadı veya klasör boş.'}\n\`\`\``);
     }
 
-    // 3. Ekranı Kilitle
-    if (
-      /(ekran[ıi]?\s*kilitle|kilitle|bilgisayar[ıi]?\s*kilitle|lock\s*screen|lock\s*pc|kilit)/i.test(text)
-    ) {
-      const res = await bridgeService.sendAction('lock_pc');
-      return `🔒 **Laptop Ekranı Kilitlendi!**\nOturum güvenli bir şekilde kilitlendi.`;
+    // 3. Laptop Ekranında Bildirim Göster (örn: 'Laptop ekranında bildirim göster: Toplantı vakti')
+    if (/bildirim\s*(göster|at|yolla|çıkar)/i.test(lower)) {
+      const msg = text.replace(/^.*?(?:bildirim\s*(?:göster|at|yolla|çıkar)[:\s]*)/i, '').replace(/^["']|["']$/g, '').trim() || 'Namikaze AI bildirimi!';
+      return await runAction('show_notification', msg, () => `🔔 **Laptop Ekranında Bildirim Gösterildi:**\n"${msg}"`);
     }
 
-    // 4. Uyku Modu
-    if (/(uyku\s*modu|uyut|uyu|sleep\s*mode|sleep\s*pc)/i.test(text)) {
-      const res = await bridgeService.sendAction('sleep_pc');
-      return `💤 **Laptop Uyku Moduna Alındı.**`;
+    // 4. Pano (Clipboard) İşlemleri (örn: 'Panomda ne kopyalı göster', 'panoya kopyala "test"')
+    if (/panoya\s*kopyala/i.test(lower)) {
+      const clipText = text.replace(/^.*?panoya\s*kopyala[:\s]*/i, '').replace(/^["']|["']$/g, '').trim();
+      return await runAction('set_clipboard', clipText, () => `📋 **Metin Laptop Panosuna Kopyalandı:**\n"${clipText}"`);
+    }
+    if ((/(pano(mda|yu|da)?|clipboard)/i.test(lower) && /(ne var|oku|göster|kopyalı|ver)/i.test(lower)) || lower === 'pano') {
+      return await runAction('get_clipboard', '', (res) => `📋 **Laptop Panosu (Clipboard):**\n\`\`\`\n${res.output || '(Pano boş)'}\n\`\`\``);
     }
 
-    // 5. Ses Aç / Yükselt
-    if (/(ses[i]?\s*(aç|yükselt|artır)|volume\s*up)/i.test(text)) {
-      const res = await bridgeService.sendAction('volume_up');
-      return `🔊 **Laptop Sesi Yükseltildi (+10%).**`;
+    // 5. Görev Yöneticisi & En Çok RAM Kullanan Programlar (örn: 'En çok RAM harcayan programlar')
+    if (/(ram|bellek|işlem(ler)?|program(lar)?|süreç(ler)?|görev\s*yöneticisi)/i.test(lower) && /(harcayan|kullanan|açık|çalışan|göster|listele|en çok)/i.test(lower)) {
+      const res = await bridgeService.getProcesses();
+      if (res && res.ok && Array.isArray(res.processes) && res.processes.length > 0) {
+        const list = res.processes.slice(0, 10).map((p, i) => `${i + 1}. **${p.ProcessName}** (PID: ${p.Id}) — ${p.MemoryMB} MB RAM${p.MainWindowTitle ? ` [_${p.MainWindowTitle.slice(0, 30)}_]` : ''}`).join('\n');
+        return `⚡ **En Çok RAM Kullanan Programlar:**\n\n${list}`;
+      }
+      return `⚠️ **Laptop İşlem Hatası:** ${res?.error || 'Açık programlar listelenemedi. Laptop köprüsünü kontrol edin.'}`;
     }
 
-    // 6. Ses Kıs / Azalt
-    if (/(ses[i]?\s*(kıs|azalt|alçalt)|volume\s*down)/i.test(text)) {
-      const res = await bridgeService.sendAction('volume_down');
-      return `🔉 **Laptop Sesi Kısıldı (-10%).**`;
-    }
-
-    // 7. Sessiz / Mute
-    if (/(sessiz|mute|ses[i]?\s*(kapat|sustur))/i.test(text)) {
-      const res = await bridgeService.sendAction('volume_mute');
-      return `🔇 **Laptop Sessize Alındı / Açıldı.**`;
-    }
-
-    // 8. Medya Oynat / Durdur
-    if (/(oynat|duraklat|durdur|şarkı(yı)?\s*durdur|şarkı(yı)?\s*başlat|play|pause)/i.test(text)) {
-      const res = await bridgeService.sendAction('media_play_pause');
-      return `⏯️ **Medya Oynatıldı / Duraklatıldı.**`;
-    }
-
-    // 9. Sonraki Şarkı
-    if (/(sonraki\s*(şarkı|müzik|parça)|next\s*track)/i.test(text)) {
-      const res = await bridgeService.sendAction('media_next');
-      return `⏭️ **Sonraki Parçaya Geçildi.**`;
-    }
-
-    // 10. Önceki Şarkı
-    if (/(önceki\s*(şarkı|müzik|parça)|prev\s*track)/i.test(text)) {
-      const res = await bridgeService.sendAction('media_prev');
-      return `⏮️ **Önceki Parçaya Geçildi.**`;
-    }
-
-    // 11. Geri Dönüşüm Kutusu / Çöp Temizle
-    if (/(çöp[ü]?\s*(boşalt|temizle)|geri dönüşüm(ü)?\s*boşalt|empty recycle)/i.test(text)) {
-      const res = await bridgeService.sendAction('empty_recycle_bin');
-      return `🗑️ **Geri Dönüşüm Kutusu Temizlendi.**`;
-    }
-
-    // 12. Ekran Görüntüsü
-    if (/(ekran\s*(görüntüsü|resmi)|screenshot|ss\s*al)/i.test(text)) {
+    // 6. Canlı Ekran Görüntüsü (örn: 'Ekran görüntüsü al', 'ss al', 'ekranı çek')
+    if ((/(ekran|screenshot|ss)/i.test(lower) && /(çek|al|görüntü|resim|yolla|at|göster)/i.test(lower)) || lower === 'ss' || lower === 'screenshot') {
       const res = await bridgeService.getScreenshot();
       if (res && res.ok && res.image) {
         return `📸 **Laptop Ekran Görüntüsü Alındı!** (${res.timestamp})\nEkran görüntüsü Ana Ekrandaki monitöre aktarıldı.`;
       }
-      return `⚠️ Ekran görüntüsü alınamadı: ${res?.error || 'Laptop köprüsü yanıt vermedi.'}`;
+      return `⚠️ **Ekran Görüntüsü:** ${res?.error || 'Alınamadı (Laptop ekranı kilitli olabilir)'}`;
     }
 
-    // 13. YouTube Aç
-    if (/(youtube\s*aç|youtube'?a\s*git|open\s*youtube)/i.test(text)) {
-      const res = await bridgeService.sendAction('open_url', 'https://www.youtube.com');
-      return `🌐 **YouTube Laptopta Açıldı.**`;
+    // 7. Bilgisayarı Kapat / Yeniden Başlat / Kilitle / Uyut
+    if (/^(bilgisayar[ıi]|laptop[u]?|pc)?\s*(kapat|kapatılsın|turn off|shutdown|power off)$/i.test(lower) || lower === 'kapat' || lower === 'bilgisayarı kapat' || lower === 'laptopu kapat') {
+      return await runAction('shutdown_pc', '', (res) => `🔌 **Laptop Kapatılıyor!**\nSistem 15 saniye içinde güvenli bir şekilde kapatılacaktır.\n_${res.output || 'Komut iletildi.'}_`);
+    }
+    if (/^(bilgisayar[ıi]|laptop[u]?|pc)?\s*(yeniden başlat|restart|reboot)$/i.test(lower) || lower === 'yeniden başlat' || lower === 'restart') {
+      return await runAction('restart_pc', '', (res) => `🔄 **Laptop Yeniden Başlatılıyor!**\nSistem 15 saniye içinde yeniden başlatılacaktır.\n_${res.output || 'Komut iletildi.'}_`);
+    }
+    if (/(ekran[ıi]?\s*kilitle|kilitle|bilgisayar[ıi]?\s*kilitle|lock\s*screen|lock\s*pc|kilit)/i.test(lower)) {
+      return await runAction('lock_pc', '', () => `🔒 **Laptop Ekranı Kilitlendi!**\nOturum kilitlendi.`);
+    }
+    if (/(uyku\s*modu|uyut|uyu|sleep\s*mode|sleep\s*pc)/i.test(lower)) {
+      return await runAction('sleep_pc', '', () => `💤 **Laptop Uyku Moduna Alındı.**`);
     }
 
-    // 14. Google Aç
-    if (/(google\s*aç|google'?a\s*git|open\s*google)/i.test(text)) {
-      const res = await bridgeService.sendAction('open_url', 'https://www.google.com');
-      return `🌐 **Google Laptopta Açıldı.**`;
+    // 8. Ses Kontrolleri (Aç / Kıs / Sustur)
+    if (/(ses[i]?\s*(aç|yükselt|artır)|volume\s*up)/i.test(lower)) {
+      return await runAction('volume_up', '', () => `🔊 **Laptop Sesi Yükseltildi (+10%).**`);
+    }
+    if (/(ses[i]?\s*(kıs|azalt|alçalt)|volume\s*down)/i.test(lower)) {
+      return await runAction('volume_down', '', () => `🔉 **Laptop Sesi Kısıldı (-10%).**`);
+    }
+    if (/(sessiz|mute|ses[i]?\s*(kapat|sustur))/i.test(lower)) {
+      return await runAction('volume_mute', '', () => `🔇 **Laptop Sessize Alındı / Açıldı.**`);
     }
 
-    // 15. Not Defteri Aç
-    if (/(not\s*defteri(ni)?\s*aç|notepad)/i.test(text)) {
-      const res = await bridgeService.sendAction('launch_app', 'notepad');
-      return `📝 **Not Defteri Laptopta Başlatıldı.**`;
+    // 9. Medya Kontrolleri (Oynat / Durdur / Sonraki / Önceki)
+    if (/(oynat|duraklat|durdur|şarkı(yı)?\s*durdur|şarkı(yı)?\s*başlat|müzik\s*durdur|play|pause)/i.test(lower)) {
+      return await runAction('media_play_pause', '', () => `⏯️ **Medya Oynatıldı / Duraklatıldı.**`);
+    }
+    if (/(sonraki\s*(şarkı|müzik|parça)|next\s*track|sonraki\s*parça)/i.test(lower)) {
+      return await runAction('media_next', '', () => `⏭️ **Sonraki Parçaya Geçildi.**`);
+    }
+    if (/(önceki\s*(şarkı|müzik|parça)|prev\s*track|önceki\s*parça)/i.test(lower)) {
+      return await runAction('media_prev', '', () => `⏮️ **Önceki Parçaya Geçildi.**`);
     }
 
-    // 16. Hesap Makinesi Aç
-    if (/(hesap\s*makinesi(ni)?\s*aç|calc|calculator)/i.test(text)) {
-      const res = await bridgeService.sendAction('launch_app', 'calc');
-      return `🧮 **Hesap Makinesi Laptopta Başlatıldı.**`;
+    // 10. Geri Dönüşüm Kutusu / Çöp Temizle
+    if (/(çöp[ü]?\s*(boşalt|temizle)|geri dönüşüm(ü)?\s*boşalt|empty recycle)/i.test(lower)) {
+      return await runAction('empty_recycle_bin', '', () => `🗑️ **Geri Dönüşüm Kutusu Temizlendi.**`);
     }
 
-    // 17. Laptop Durumu / Pil / Şarj / CPU
-    if (/(laptop\s*durumu|pc\s*durumu|şarj(ı)?\s*kaç|batarya|pil\s*durumu|sistem\s*durumu)/i.test(text)) {
+    // 11. Belirli Programları Aç
+    const knownApps = [
+      { regex: /(chrome|tarayıcı|google chrome)\s*(aç|başlat)/i, app: 'chrome', label: 'Google Chrome' },
+      { regex: /(spotify|müzik)\s*(aç|başlat)/i, app: 'spotify', label: 'Spotify' },
+      { regex: /(vscode|vs\s*code|kod(u)?)\s*(aç|başlat)/i, app: 'code', label: 'VS Code' },
+      { regex: /(not\s*defteri|notepad)\s*(aç|başlat)/i, app: 'notepad', label: 'Not Defteri' },
+      { regex: /(hesap\s*makinesi|calc)\s*(aç|başlat)/i, app: 'calc', label: 'Hesap Makinesi' },
+      { regex: /(terminal|powershell|cmd|komut\s*satırı)\s*(aç|başlat)/i, app: 'powershell', label: 'PowerShell' },
+      { regex: /(görev\s*yöneticisi|taskmgr)\s*(aç|başlat)/i, app: 'taskmgr', label: 'Görev Yöneticisi' },
+    ];
+    for (const ka of knownApps) {
+      if (ka.regex.test(lower)) {
+        return await runAction('launch_app', ka.app, () => `🚀 **${ka.label} Laptopta Başlatıldı.**`);
+      }
+    }
+
+    // 12. Web Siteleri (YouTube, Google, GitHub vb.)
+    if (/(youtube|yt)/i.test(lower) && /(aç|git)/i.test(lower)) {
+      return await runAction('open_url', 'https://www.youtube.com', () => `🌐 **YouTube Laptopta Açıldı.**`);
+    }
+    if (/(google)\s*(aç|git)/i.test(lower)) {
+      return await runAction('open_url', 'https://www.google.com', () => `🌐 **Google Laptopta Açıldı.**`);
+    }
+    if (/(github)\s*(aç|git)/i.test(lower)) {
+      return await runAction('open_url', 'https://www.github.com', () => `🌐 **GitHub Laptopta Açıldı.**`);
+    }
+
+    // 13. Laptop Durumu / Pil / CPU
+    if (/(laptop\s*durumu|pc\s*durumu|şarj(ı)?\s*kaç|batarya|pil\s*durumu|sistem\s*durumu)/i.test(lower)) {
       const status = await bridgeService.getStatus();
       if (status && status.ok) {
         return `💻 **Laptop Durum Raporu (${status.hostname}):**\n` +
@@ -299,9 +318,21 @@ export const aiService = {
                `• ⏱️ **Çalışma Süresi:** ${status.uptimeHours} saat\n` +
                `• 🌐 **Bağlantı:** Aktif (${status.timestamp})`;
       }
+      return `⚠️ **Laptop Durum Hatası:** ${status?.error || 'Laptop köprüsüne ulaşılamadı.'}`;
     }
 
-    return null; // Doğrudan standart komut değil -> Gemini AI'ya aktar
+    // 14. Doğrudan PowerShell / Shell Komutu (örn: 'ps: dir', 'ipconfig', 'hostname', 'whoami')
+    if (/^(?:ps|cmd|powershell)\s*:\s*(.+)$/i.test(text) || /^(?:dir|ls|ipconfig|whoami|hostname|systeminfo|Get-[a-zA-Z]+)/i.test(text)) {
+      const cmd = text.replace(/^(?:ps|cmd|powershell)\s*:\s*/i, '');
+      const res = await bridgeService.execPowerShell(cmd);
+      if (res && res.ok) {
+        const out = res.output || '(Komut tamamlandı, çıktı yok)';
+        return `⚡ **PowerShell Çalıştırıldı:**\n\`${cmd}\`\n\n💻 **Sonuç:**\n\`\`\`\n${out.slice(0, 1000)}\n\`\`\``;
+      }
+      return `⚠️ **PowerShell Hatası:** ${res?.error || 'Komut çalıştırılamadı'}`;
+    }
+
+    return null; // Standart PC komutu değil -> Serbest yapay zeka sohbetine aktar
   },
 
   /**
@@ -334,6 +365,14 @@ export const aiService = {
         const msg = errData?.error?.message || `HTTP ${status}`;
         lastError = `[${model}] (${status}): ${msg}`;
 
+        if (status === 401 || status === 403) {
+          return {
+            ok: false,
+            isAuthError: true,
+            error: `🔑 **Geçersiz Gemini API Anahtarı**\n\nGoogle Gemini bu anahtarı reddetti (Hata ${status}: ${msg}).\n\nLütfen **Ayarlar ⚙️** sekmesinden [aistudio.google.com](https://aistudio.google.com/app/apikey) adresinden alacağınız ücretsiz anahtarı ("AIzaSy..." ile başlayan) kaydedin.\n\n⚡ _Tüm laptop kontrol komutlarını (ses, medya, program açma, dosya arama, ekran kilitleme vb.) anahtarsız olarak doğrudan kullanabilirsiniz._`
+          };
+        }
+
         // 503 (Yüksek Talep / Server Unavailable) veya 429 veya 500 hatasında hemen sıradaki modele geç!
         if ([404, 429, 500, 502, 503, 504].includes(status)) {
           continue;
@@ -356,7 +395,7 @@ export const aiService = {
    * Ana Mesaj Gönderme ve Yapay Zeka Yürütme Döngüsü
    */
   async sendMessage(userMessage, conversationHistory = []) {
-    // 1. Önce Hızlı Çevrimdışı / Doğrudan Komutları Yakala
+    // 1. Önce Hızlı Çevrimdışı / Doğrudan Komutları Yakala (0 ms gecikme, sıfır hata)
     try {
       const directResult = await this.matchDirectCommand(userMessage);
       if (directResult) {
@@ -374,8 +413,8 @@ export const aiService = {
       apiKey = APP_CONFIG?.GEMINI_API_KEY || '';
     }
 
-    if (!apiKey || apiKey.trim() === '') {
-      apiKey = APP_CONFIG?.GEMINI_API_KEY || '';
+    if (!apiKey || !apiKey.startsWith('AIzaSy')) {
+      return `💡 **Google Gemini Yapay Zeka Komutanı**\n\nBu serbest bir sohbet veya genel soru. Google Gemini yapay zekasını aktifleştirmek için:\n\n1. [aistudio.google.com](https://aistudio.google.com/app/apikey) adresinden ücretsiz bir API anahtarı alın ("AIzaSy..." ile başlar).\n2. **Ayarlar ⚙️** sekmesinden kutucuğa yapıştırıp **Kaydet** butonuna dokunun.\n\n⚡ **Not:** Tüm laptop kontrol komutları (ses aç/kıs, medya, YouTube, program başlatma, ekran görüntüsü, dosya arama, pano, görev yöneticisi vb.) anahtar olmadan doğrudan çalışmaktadır!`;
     }
 
     try {

@@ -192,6 +192,19 @@ const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
   logMsg(`📡 [${req.method}] ${req.url} (ip: ${req.socket?.remoteAddress || 'unknown'})`);
 
+  // 0. YEREL YAPILANDIRMA VE TÜNEL BİLGİSİ (/remote-config)
+  if (req.method === 'GET' && url === '/remote-config') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      lanUrl: `http://${getLocalLanIp()}:${PORT}`,
+      bridgeUrl: primaryTunnelUrl || backupTunnelUrl,
+      backupTunnelUrl,
+      version: '3.4.1',
+      announcement: '✨ Namikaze AI v3.4.1: Çevrimdışı komutlar ve C# ekran görüntüsü motoru',
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
   // 1. CANLI SİSTEM DURUMU (/status)
   if (req.method === 'GET' && (url === '/status' || url === '/')) {
     const totalMem = os.totalmem();
