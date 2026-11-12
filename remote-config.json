@@ -2,10 +2,10 @@
   "lanUrl": "http://192.168.178.108:4040",
   "apkUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/Namikaze-AI.apk",
   "version": "3.4.2",
-  "bridgeUrl": "https://e05f5d5ec5f5ce.lhr.life",
+  "bridgeUrl": "https://const-surf-sensor-anti.trycloudflare.com",
   "bundleUrl": "https://github.com/namikazeomar155/mobil-uygulama/releases/latest/download/index.android.bundle",
   "announcement": "✨ Namikaze AI v3.4.2: Görünür ikonlar, çevrimdışı komutlar ve kesintisiz bağlantı!",
-  "updatedAt": "2026-11-12T15:12:04.862Z",
+  "updatedAt": "2026-11-12T15:12:12.166Z",
   "backupTunnelUrl": "https://e05f5d5ec5f5ce.lhr.life",
   "bundleVersion": "3.4.2"
 }
